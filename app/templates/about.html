@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>About · Seed Bank</title>
+    <link rel="stylesheet" href="{{ request.script_root }}/static/css/seeds.css?v={{ version }}">
+</head>
+<body>
+<header class="topbar">
+    <a class="topbar-back" href="{{ request.script_root }}/">← Seed Bank</a>
+    <span class="topbar-title">🌱 Seed Bank</span>
+</header>
+<main class="about">
+    <h1>Seed Bank {{ version }}</h1>
+    <p>The Gardiner Lab suite's record of plant lines, the seed lots they are kept as and the plants grown
+       from them, with how each descends from the others.</p>
+    <ul>
+        <li><b>Lines</b>: wild types, mutants, transgenic events and crosses, with their parents and the
+            plasmids they carry (from the Plasmid Editor).</li>
+        <li><b>Seed lots</b>: where they are kept, how much is left, germination and zygosity, and
+            segregation tests on selection plates.</li>
+        <li><b>Plants</b>: sown from a lot and numbered; harvested into the next generation, crossed, or the
+            founder of a new line; phenotypes with photos, 3D scans and files.</li>
+        <li><b>Labels</b> with QR codes that open the record on a phone.</li>
+    </ul>
+    <p>A lab's stocks are shared within the lab and not seen by other labs.</p>
+    <h2>Licence</h2>
+    <p>Free software under the GNU General Public License v3.0. It includes
+       <a href="https://threejs.org/" rel="noopener">three.js</a> for the 3D viewer and
+       <a href="https://github.com/kazuhikoarase/qrcode-generator" rel="noopener">qrcode-generator</a> for labels,
+       both under the MIT licence (see NOTICE).</p>
+</main>
+</body>
+</html>

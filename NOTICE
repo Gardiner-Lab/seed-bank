@@ -1,0 +1,16 @@
+Seed Bank
+Copyright (C) 2026 Gardiner Lab, Utrecht University
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 or (at your option) any later version. See LICENSE.
+
+It includes, unchanged, in app/static/vendor:
+
+three.js 0.160.0 (the 3D viewer)
+    https://threejs.org/  Copyright (c) 2010-2023 three.js authors
+    MIT licence: app/static/vendor/three/LICENSE
+
+qrcode-generator 1.4.4 (label QR codes)
+    https://github.com/kazuhikoarase/qrcode-generator  Copyright (c) 2009 Kazuhiko Arase
+    MIT licence: see the header of app/static/vendor/qrcode.js

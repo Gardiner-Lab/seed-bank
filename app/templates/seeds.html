@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Seed Bank</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+    <link rel="stylesheet" href="{{ request.script_root }}/static/css/seeds.css?v={{ version }}">
+    <!-- three.js (MIT), kept in this repository, for the 3D viewer. -->
+    <script type="importmap">
+        {"imports": {"three": "{{ request.script_root }}/static/vendor/three/three.module.min.js",
+                     "three/addons/": "{{ request.script_root }}/static/vendor/three/addons/"}}
+    </script>
+</head>
+<body>
+<header class="topbar">
+    <a class="topbar-back" href="{{ links.suite_home }}">← Lab tools</a>
+    <span class="topbar-title">🌱 Seed Bank</span>
+    <nav class="view-tabs">
+        <a class="view-tab" data-view="lines" href="#lines">Lines</a>
+        <a class="view-tab" data-view="lots" href="#lots">Seed lots</a>
+        <a class="view-tab" data-view="plants" href="#plants">Plants</a>
+    </nav>
+    <nav class="topbar-nav">
+        <a href="{{ links.notebook }}/" target="_blank" rel="noopener">Notebook ↗</a>
+        <a href="{{ links.editor }}/editor" target="_blank" rel="noopener">Plasmid Editor ↗</a>
+        <a href="{{ request.script_root }}/about">About</a>
+    </nav>
+    <span class="topbar-user">{{ person.username }}{% if person.lab %} · {{ person.lab }}{% endif %}{% if person.role == 'admin' %} · admin{% endif %}</span>
+    <a class="topbar-logout" href="{{ links.logout }}">Log out</a>
+</header>
+<main class="main" id="main"></main>
+<div id="toasts" class="toasts"></div>
+<script>
+    window.SB = {
+        base: {{ request.script_root | tojson }},
+        editor: {{ links.editor | tojson }},
+        notebook: {{ links.notebook | tojson }},
+        person: {{ person.to_dict() | tojson }},
+    };
+</script>
+<script src="{{ request.script_root }}/static/js/seeds.js?v={{ version }}"></script>
+</body>
+</html>

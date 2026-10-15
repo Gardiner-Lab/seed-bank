@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Labels · Seed Bank</title>
+    <link rel="stylesheet" href="{{ request.script_root }}/static/css/seeds.css?v={{ version }}">
+</head>
+<body class="labels-page">
+<header class="topbar no-print">
+    <a class="topbar-back" href="{{ request.script_root }}/">← Seed Bank</a>
+    <span class="topbar-title">🏷️ Labels</span>
+    <label class="hint">Size
+        <select id="labelSize">
+            <option value="small">Small (seed bag, 38 × 21 mm)</option>
+            <option value="medium" selected>Medium (pot, 64 × 34 mm)</option>
+            <option value="large">Large (box, 99 × 38 mm)</option>
+        </select>
+    </label>
+    <button class="btn btn-primary" onclick="window.print()">🖨 Print</button>
+</header>
+<p class="hint no-print labels-help" id="labelsHelp"></p>
+<div class="label-sheet" id="sheet"></div>
+<script>
+    window.SB = { base: {{ request.script_root | tojson }}, public: {{ links.public | tojson }} };
+</script>
+<!-- qrcode-generator (MIT), kept in this repository. -->
+<script src="{{ request.script_root }}/static/vendor/qrcode.js?v={{ version }}"></script>
+<script src="{{ request.script_root }}/static/js/labels.js?v={{ version }}"></script>
+</body>
+</html>

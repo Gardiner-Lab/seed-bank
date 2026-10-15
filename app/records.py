@@ -1,0 +1,727 @@
+"""
+Lines, seed lots and plants, and how they descend from each other.
+
+    a line        is a genetic identity: wild type, a mutant, a transgenic event, a cross
+    a seed lot    holds seeds of a line and generation; it came from a plant
+                  (harvested), from two plants (a cross), or from outside (a
+                  stock centre, a colleague)
+    a plant       is sown from a lot and numbered within it; it can be harvested
+                  into a new lot (T1 -> T2), crossed, or found a line of its own
+                  (a T1 transformant becomes an independent event)
+
+Records belong to the lab of whoever made them. Everyone in that lab sees and
+changes them; other labs do not see them at all; administrators see all.
+Every change is logged with who made it.
+"""
+
+import re
+import secrets
+from typing import Any, Dict, List, Optional
+
+from app import stats
+from app.db import connect
+from app.people import Person
+
+LINE_KINDS = ('wild type', 'mutant', 'transgenic', 'population', 'cross', 'other')
+ZYGOSITY = ('', 'homozygous', 'heterozygous', 'hemizygous', 'segregating', 'wild type', 'unknown')
+PLANT_STATUS = ('growing', 'harvested', 'discarded', 'dead')
+PARENT_ROLES = ('mother', 'father', 'background', 'founded from', 'parent')
+PREFIX = {'line': 'L', 'lot': 'S', 'plant': 'P'}
+TABLE = {'line': 'lines', 'lot': 'lots', 'plant': 'plants'}
+KIND_OF_PREFIX = {v: k for k, v in PREFIX.items()}
+MAX_PLANTS_PER_SOWING = 500
+
+
+class Forbidden(Exception):
+    pass
+
+
+class NotFound(Exception):
+    pass
+
+
+def lab_of(person: Person) -> str:
+    """Whose stocks a person's records join: their lab's, or their own without one."""
+    return person.lab or f'user:{person.username}'
+
+
+def can_see(person: Person, row) -> bool:
+    return person.is_admin or (row['lab'] or '').casefold() == lab_of(person).casefold()
+
+
+def _new_id() -> str:
+    return secrets.token_hex(12)
+
+
+def _code(conn, kind: str) -> str:
+    prefix = PREFIX[kind]
+    conn.execute('INSERT INTO counters (prefix, value) VALUES (?, 1) '
+                 'ON CONFLICT(prefix) DO UPDATE SET value = value + 1', (prefix,))
+    n = conn.execute('SELECT value FROM counters WHERE prefix = ?', (prefix,)).fetchone()[0]
+    return f'{prefix}-{n:04d}'
+
+
+def _log(conn, kind: str, record_id: str, by: str, what: str) -> None:
+    conn.execute('INSERT INTO changes (record_kind, record_id, changed_by, what) VALUES (?, ?, ?, ?)',
+                 (kind, record_id, by, what[:1000]))
+
+
+def _text(value: Any, limit: int = 500) -> str:
+    return str(value if value is not None else '').strip()[:limit]
+
+
+def _date(value: Any) -> Optional[str]:
+    v = _text(value, 10)
+    if not v:
+        return None
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', v):
+        raise ValueError('Dates are written YYYY-MM-DD')
+    return v
+
+
+def next_generation(generation: str) -> str:
+    """T1 -> T2, F2 -> F3; anything else is left for the person to say."""
+    m = re.fullmatch(r'([A-Za-z]+)(\d+)', (generation or '').strip())
+    return f'{m.group(1)}{int(m.group(2)) + 1}' if m else ''
+
+
+def kind_of(ident: str) -> Optional[str]:
+    """What a code names: L-0001 a line, S-0001 a seed lot, P-0001 a plant."""
+    m = re.fullmatch(r'([LSP])-\d+', (ident or '').strip().upper())
+    return KIND_OF_PREFIX[m.group(1)] if m else None
+
+
+def _row(conn, kind: str, ident: str):
+    table = TABLE[kind]
+    row = conn.execute(f'SELECT * FROM {table} WHERE (id = ? OR code = ?) AND deleted_at IS NULL',
+                       (ident, (ident or '').upper())).fetchone()
+    if row is None:
+        raise NotFound(f'No such {"seed lot" if kind == "lot" else kind}')
+    return row
+
+
+def visible(conn, person: Person, kind: str, ident: str):
+    row = _row(conn, kind, ident)
+    if not can_see(person, row):
+        # As if it were not there: another lab's stocks are not even named.
+        raise NotFound(f'No such {"seed lot" if kind == "lot" else kind}')
+    return row
+
+
+def _brief(conn, kind: str, record_id: Optional[str]) -> Optional[dict]:
+    if not record_id:
+        return None
+    row = conn.execute(f'SELECT * FROM {TABLE[kind]} WHERE id = ?', (record_id,)).fetchone()
+    if row is None:
+        return None
+    out = {'kind': kind, 'id': row['id'], 'code': row['code'], 'deleted': bool(row['deleted_at'])}
+    if kind == 'line':
+        out.update(name=row['name'], species=row['species'], line_kind=row['kind'])
+    elif kind == 'lot':
+        line = conn.execute('SELECT name FROM lines WHERE id = ?', (row['line_id'],)).fetchone()
+        out.update(generation=row['generation'], line=line['name'] if line else '', location=row['location'])
+    else:
+        line = conn.execute('SELECT name FROM lines WHERE id = ?', (row['line_id'],)).fetchone()
+        lot = conn.execute('SELECT code, generation FROM lots WHERE id = ?', (row['lot_id'],)).fetchone()
+        out.update(number=row['number'], line=line['name'] if line else '', status=row['status'],
+                   generation=lot['generation'] if lot else '', lot=lot['code'] if lot else '')
+    return out
+
+
+def _changed(row, fields: Dict[str, Any]) -> List[str]:
+    return [f'{k}: {row[k]!r} → {v!r}' for k, v in fields.items() if row[k] != v]
+
+
+# --- lines -----------------------------------------------------------------------
+
+def _line_fields(data: dict, partial: bool = False) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    if 'name' in data or not partial:
+        name = _text(data.get('name'), 200)
+        if not name:
+            raise ValueError('A line needs a name')
+        out['name'] = name
+    for key, limit in (('species', 120), ('background', 200), ('description', 5000)):
+        if key in data or not partial:
+            out[key] = _text(data.get(key), limit)
+    if 'kind' in data or not partial:
+        kind = _text(data.get('kind')) or 'other'
+        if kind not in LINE_KINDS:
+            raise ValueError(f'kind must be one of {", ".join(LINE_KINDS)}')
+        out['kind'] = kind
+    return out
+
+
+def create_line(person: Person, data: dict) -> str:
+    fields = _line_fields(data)
+    with connect() as conn:
+        line_id = _new_id()
+        code = _code(conn, 'line')
+        conn.execute('INSERT INTO lines (id, code, lab, name, species, background, kind, description, created_by) '
+                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                     (line_id, code, lab_of(person), fields['name'], fields['species'], fields['background'],
+                      fields['kind'], fields['description'], person.username))
+        for parent in data.get('parents') or []:
+            _add_parent(conn, person, line_id, parent.get('id'), parent.get('role') or 'parent')
+        for plasmid in data.get('plasmids') or []:
+            _add_plasmid(conn, line_id, plasmid)
+        _log(conn, 'line', line_id, person.username, f'created {code}')
+        return line_id
+
+
+def _add_parent(conn, person: Person, line_id: str, parent_ident: str, role: str) -> None:
+    if role not in PARENT_ROLES:
+        raise ValueError(f'role must be one of {", ".join(PARENT_ROLES)}')
+    parent = visible(conn, person, 'line', parent_ident or '')
+    if parent['id'] == line_id:
+        raise ValueError('A line cannot be its own parent')
+    conn.execute('INSERT OR IGNORE INTO line_parents (line_id, parent_id, role) VALUES (?, ?, ?)',
+                 (line_id, parent['id'], role))
+
+
+def _add_plasmid(conn, line_id: str, plasmid: dict) -> None:
+    pid, name = _text(plasmid.get('id'), 80), _text(plasmid.get('name'), 200)
+    if not pid:
+        raise ValueError('Choose a plasmid')
+    conn.execute('INSERT OR REPLACE INTO line_plasmids (line_id, plasmid_id, name) VALUES (?, ?, ?)',
+                 (line_id, pid, name or pid))
+
+
+def update_line(person: Person, ident: str, data: dict) -> None:
+    fields = _line_fields(data, partial=True)
+    with connect() as conn:
+        row = visible(conn, person, 'line', ident)
+        changes = _changed(row, fields)
+        if fields:
+            conn.execute(f'UPDATE lines SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
+                         'WHERE id = ?', (*fields.values(), row['id']))
+        if changes:
+            _log(conn, 'line', row['id'], person.username, '; '.join(changes))
+
+
+def set_plasmids(person: Person, ident: str, plasmids: List[dict]) -> None:
+    with connect() as conn:
+        row = visible(conn, person, 'line', ident)
+        before = sorted(r['name'] for r in conn.execute('SELECT name FROM line_plasmids WHERE line_id = ?', (row['id'],)))
+        conn.execute('DELETE FROM line_plasmids WHERE line_id = ?', (row['id'],))
+        for p in plasmids or []:
+            _add_plasmid(conn, row['id'], p)
+        after = sorted(r['name'] for r in conn.execute('SELECT name FROM line_plasmids WHERE line_id = ?', (row['id'],)))
+        if before != after:
+            _log(conn, 'line', row['id'], person.username, f'plasmids: {", ".join(before) or "none"} → {", ".join(after) or "none"}')
+
+
+def set_parents(person: Person, ident: str, parents: List[dict]) -> None:
+    with connect() as conn:
+        row = visible(conn, person, 'line', ident)
+        conn.execute('DELETE FROM line_parents WHERE line_id = ?', (row['id'],))
+        for p in parents or []:
+            _add_parent(conn, person, row['id'], p.get('id'), p.get('role') or 'parent')
+        # No line may end up among its own ancestors.
+        if row['id'] in _ancestor_lines(conn, row['id']):
+            raise ValueError('That would make the line its own ancestor')
+        _log(conn, 'line', row['id'], person.username, 'parents changed')
+
+
+def _ancestor_lines(conn, line_id: str, limit: int = 200) -> List[str]:
+    found, todo = [], [line_id]
+    while todo and len(found) < limit:
+        current = todo.pop()
+        for r in conn.execute('SELECT parent_id FROM line_parents WHERE line_id = ?', (current,)):
+            if r['parent_id'] not in found:
+                found.append(r['parent_id'])
+                todo.append(r['parent_id'])
+    return found
+
+
+# --- seed lots ---------------------------------------------------------------------
+
+def _lot_fields(data: dict, partial: bool = False) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key, limit in (('generation', 20), ('source', 300), ('amount', 100), ('location', 200), ('notes', 5000)):
+        if key in data or not partial:
+            out[key] = _text(data.get(key), limit)
+    if 'harvested_on' in data or not partial:
+        out['harvested_on'] = _date(data.get('harvested_on'))
+    if 'germination' in data or not partial:
+        g = data.get('germination')
+        if g in (None, ''):
+            out['germination'] = None
+        else:
+            try:
+                g = float(g)
+            except (TypeError, ValueError):
+                raise ValueError('Germination is a percentage')
+            if not 0 <= g <= 100:
+                raise ValueError('Germination is a percentage, 0 to 100')
+            out['germination'] = g
+    if 'zygosity' in data or not partial:
+        z = _text(data.get('zygosity'))
+        if z not in ZYGOSITY:
+            raise ValueError(f'zygosity must be one of {", ".join(z for z in ZYGOSITY if z)}')
+        out['zygosity'] = z
+    if 'used_up' in data:
+        out['used_up'] = 1 if data.get('used_up') else 0
+    return out
+
+
+def create_lot(person: Person, data: dict, *, from_plant: Optional[str] = None,
+               father_plant: Optional[str] = None, line_id: Optional[str] = None) -> str:
+    fields = _lot_fields(data)
+    with connect() as conn:
+        if line_id is None:
+            line_id = visible(conn, person, 'line', _text(data.get('line')))['id']
+        lot_id = _new_id()
+        code = _code(conn, 'lot')
+        conn.execute('INSERT INTO lots (id, code, lab, line_id, generation, from_plant_id, father_plant_id, source, '
+                     'harvested_on, amount, location, germination, zygosity, notes, created_by) '
+                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                     (lot_id, code, lab_of(person), line_id, fields['generation'], from_plant, father_plant,
+                      fields['source'], fields['harvested_on'], fields['amount'], fields['location'],
+                      fields['germination'], fields['zygosity'], fields['notes'], person.username))
+        _log(conn, 'lot', lot_id, person.username, f'created {code}')
+        return lot_id
+
+
+def update_lot(person: Person, ident: str, data: dict) -> None:
+    fields = _lot_fields(data, partial=True)
+    with connect() as conn:
+        row = visible(conn, person, 'lot', ident)
+        changes = _changed(row, fields)
+        if fields:
+            conn.execute(f'UPDATE lots SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
+                         'WHERE id = ?', (*fields.values(), row['id']))
+        if changes:
+            _log(conn, 'lot', row['id'], person.username, '; '.join(changes))
+
+
+def sow(person: Person, lot_ident: str, data: dict) -> List[str]:
+    """Plants from a seed lot, numbered on from those sown before."""
+    try:
+        count = int(data.get('count'))
+    except (TypeError, ValueError):
+        raise ValueError('How many plants?')
+    if not 1 <= count <= MAX_PLANTS_PER_SOWING:
+        raise ValueError(f'Sow 1 to {MAX_PLANTS_PER_SOWING} plants at a time')
+    sown_on, location = _date(data.get('sown_on')), _text(data.get('location'), 200)
+    with connect() as conn:
+        lot = visible(conn, person, 'lot', lot_ident)
+        start = conn.execute('SELECT COALESCE(MAX(number), 0) FROM plants WHERE lot_id = ?', (lot['id'],)).fetchone()[0]
+        made = []
+        for i in range(1, count + 1):
+            plant_id = _new_id()
+            conn.execute('INSERT INTO plants (id, code, lab, lot_id, line_id, number, sown_on, location, created_by) '
+                         'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                         (plant_id, _code(conn, 'plant'), lot['lab'], lot['id'], lot['line_id'], start + i,
+                          sown_on, location, person.username))
+            made.append(plant_id)
+        _log(conn, 'lot', lot['id'], person.username, f'sowed {count} plant{"s" if count > 1 else ""}'
+             f' (#{start + 1}–#{start + count})')
+        return made
+
+
+# --- plants -------------------------------------------------------------------------
+
+def update_plant(person: Person, ident: str, data: dict) -> None:
+    fields: Dict[str, Any] = {}
+    for key, limit in (('location', 200), ('notes', 5000)):
+        if key in data:
+            fields[key] = _text(data.get(key), limit)
+    if 'sown_on' in data:
+        fields['sown_on'] = _date(data.get('sown_on'))
+    if 'zygosity' in data:
+        z = _text(data.get('zygosity'))
+        if z not in ZYGOSITY:
+            raise ValueError('Unknown zygosity')
+        fields['zygosity'] = z
+    if 'status' in data:
+        s = _text(data.get('status'))
+        if s not in PLANT_STATUS:
+            raise ValueError(f'status must be one of {", ".join(PLANT_STATUS)}')
+        fields['status'] = s
+    if 'selected' in data:
+        fields['selected'] = 1 if data.get('selected') else 0
+    with connect() as conn:
+        row = visible(conn, person, 'plant', ident)
+        changes = _changed(row, fields)
+        if fields:
+            conn.execute(f'UPDATE plants SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
+                         'WHERE id = ?', (*fields.values(), row['id']))
+        if changes:
+            _log(conn, 'plant', row['id'], person.username, '; '.join(changes))
+
+
+def harvest(person: Person, plant_ident: str, data: dict) -> str:
+    """A new seed lot from one plant: its line, the next generation."""
+    with connect() as conn:
+        plant = visible(conn, person, 'plant', plant_ident)
+        lot = conn.execute('SELECT generation FROM lots WHERE id = ?', (plant['lot_id'],)).fetchone()
+    data = dict(data)
+    data.setdefault('generation', next_generation(lot['generation'] if lot else ''))
+    lot_id = create_lot(person, data, from_plant=plant['id'], line_id=plant['line_id'])
+    with connect() as conn:
+        conn.execute("UPDATE plants SET status = 'harvested', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                     (plant['id'],))
+        code = conn.execute('SELECT code FROM lots WHERE id = ?', (lot_id,)).fetchone()['code']
+        _log(conn, 'plant', plant['id'], person.username, f'harvested into {code}')
+    return lot_id
+
+
+def cross(person: Person, mother_ident: str, father_ident: str, data: dict) -> Dict[str, str]:
+    """
+    Seeds from crossing two plants: a new line (a cross, its parents the two
+    plants' lines, carrying both lines' plasmids) and its F1 seed lot.
+    """
+    with connect() as conn:
+        mother = visible(conn, person, 'plant', mother_ident)
+        father = visible(conn, person, 'plant', father_ident)
+        if mother['id'] == father['id']:
+            raise ValueError('Choose two different plants (harvest a plant to self it)')
+        m_line = conn.execute('SELECT * FROM lines WHERE id = ?', (mother['line_id'],)).fetchone()
+        f_line = conn.execute('SELECT * FROM lines WHERE id = ?', (father['line_id'],)).fetchone()
+        plasmids = {r['plasmid_id']: r['name'] for r in conn.execute(
+            'SELECT plasmid_id, name FROM line_plasmids WHERE line_id IN (?, ?)', (m_line['id'], f_line['id']))}
+    name = _text(data.get('name'), 200) or f"{m_line['name']} × {f_line['name']}"
+    line_id = create_line(person, {
+        'name': name, 'species': m_line['species'], 'kind': 'cross',
+        'background': f"{m_line['background'] or m_line['name']} × {f_line['background'] or f_line['name']}",
+        'description': _text(data.get('description'), 5000),
+        'parents': [{'id': m_line['id'], 'role': 'mother'}, {'id': f_line['id'], 'role': 'father'}],
+        'plasmids': [{'id': k, 'name': v} for k, v in plasmids.items()],
+    })
+    lot_data = dict(data)
+    lot_data.setdefault('generation', 'F1')
+    lot_id = create_lot(person, lot_data, from_plant=mother['id'], father_plant=father['id'], line_id=line_id)
+    with connect() as conn:
+        code = conn.execute('SELECT code FROM lots WHERE id = ?', (lot_id,)).fetchone()['code']
+        for plant, role in ((mother, 'mother'), (father, 'father')):
+            _log(conn, 'plant', plant['id'], person.username, f'crossed as {role} into {code}')
+    return {'line': line_id, 'lot': lot_id}
+
+
+def found_line(person: Person, plant_ident: str, data: dict) -> str:
+    """
+    Make a plant the founder of a line of its own, as a T1 transformant is an
+    independent insertion event. Its seeds, harvested later, belong to the new line.
+    """
+    with connect() as conn:
+        plant = visible(conn, person, 'plant', plant_ident)
+        old = conn.execute('SELECT * FROM lines WHERE id = ?', (plant['line_id'],)).fetchone()
+        plasmids = [{'id': r['plasmid_id'], 'name': r['name']} for r in conn.execute(
+            'SELECT plasmid_id, name FROM line_plasmids WHERE line_id = ?', (old['id'],))]
+    name = _text(data.get('name'), 200) or f"{old['name']}-{plant['number']}"
+    line_id = create_line(person, {
+        'name': name, 'species': old['species'], 'background': old['background'],
+        'kind': _text(data.get('kind')) or ('transgenic' if old['kind'] in ('transgenic', 'population') else old['kind']),
+        'description': _text(data.get('description'), 5000) or f"Founded from plant {plant['code']} of {old['name']}.",
+        'parents': [{'id': old['id'], 'role': 'founded from'}], 'plasmids': plasmids,
+    })
+    with connect() as conn:
+        conn.execute('UPDATE plants SET line_id = ?, selected = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                     (line_id, plant['id']))
+        code = conn.execute('SELECT code FROM lines WHERE id = ?', (line_id,)).fetchone()['code']
+        _log(conn, 'plant', plant['id'], person.username, f'founded line {code}')
+    return line_id
+
+
+# --- observations and segregation tests --------------------------------------------
+
+def add_observation(person: Person, kind: str, ident: str, data: dict) -> str:
+    trait = _text(data.get('trait'), 200)
+    if not trait:
+        raise ValueError('What was observed? (the trait, e.g. "flowering", "leaf colour")')
+    with connect() as conn:
+        row = visible(conn, person, kind, ident)
+        obs_id = _new_id()
+        conn.execute('INSERT INTO observations (id, record_kind, record_id, observed_on, trait, value, notes, created_by) '
+                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                     (obs_id, kind, row['id'], _date(data.get('observed_on')), trait,
+                      _text(data.get('value'), 500), _text(data.get('notes'), 5000), person.username))
+        _log(conn, kind, row['id'], person.username, f'observed {trait}: {_text(data.get("value"), 80)}')
+        return obs_id
+
+
+def _observation_record(conn, person: Person, obs_id: str):
+    obs = conn.execute('SELECT * FROM observations WHERE id = ? AND deleted_at IS NULL', (obs_id,)).fetchone()
+    if obs is None:
+        raise NotFound('No such observation')
+    visible(conn, person, obs['record_kind'], obs['record_id'])
+    return obs
+
+
+def remove_observation(person: Person, obs_id: str) -> None:
+    with connect() as conn:
+        obs = _observation_record(conn, person, obs_id)
+        conn.execute('UPDATE observations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (obs_id,))
+        _log(conn, obs['record_kind'], obs['record_id'], person.username, f'removed observation {obs["trait"]}')
+
+
+def add_seg_test(person: Person, lot_ident: str, data: dict) -> str:
+    try:
+        resistant, sensitive = int(data.get('resistant')), int(data.get('sensitive'))
+    except (TypeError, ValueError):
+        raise ValueError('Count the resistant and sensitive seedlings')
+    if resistant < 0 or sensitive < 0 or resistant + sensitive == 0:
+        raise ValueError('Count at least one seedling')
+    expected = _text(data.get('expected')) or '3:1'
+    if expected not in stats.RATIOS:
+        raise ValueError(f'expected must be one of {", ".join(stats.RATIOS)}')
+    with connect() as conn:
+        lot = visible(conn, person, 'lot', lot_ident)
+        test_id = _new_id()
+        conn.execute('INSERT INTO seg_tests (id, lot_id, tested_on, selection, resistant, sensitive, expected, notes, '
+                     'created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                     (test_id, lot['id'], _date(data.get('tested_on')), _text(data.get('selection'), 120),
+                      resistant, sensitive, expected, _text(data.get('notes'), 5000), person.username))
+        verdict = stats.assess(resistant, sensitive, expected)['verdict']
+        _log(conn, 'lot', lot['id'], person.username, f'segregation test {resistant}:{sensitive} – {verdict}')
+        return test_id
+
+
+def remove_seg_test(person: Person, test_id: str) -> None:
+    with connect() as conn:
+        t = conn.execute('SELECT * FROM seg_tests WHERE id = ? AND deleted_at IS NULL', (test_id,)).fetchone()
+        if t is None:
+            raise NotFound('No such test')
+        visible(conn, person, 'lot', t['lot_id'])
+        conn.execute('UPDATE seg_tests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (test_id,))
+        _log(conn, 'lot', t['lot_id'], person.username, 'removed a segregation test')
+
+
+# --- deleting ------------------------------------------------------------------------
+
+def delete(person: Person, kind: str, ident: str) -> None:
+    """Remove a record that nothing else depends on (kept, out of sight)."""
+    with connect() as conn:
+        row = visible(conn, person, kind, ident)
+        if kind == 'line':
+            used = conn.execute('SELECT COUNT(*) FROM lots WHERE line_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone()[0] \
+                + conn.execute('SELECT COUNT(*) FROM plants WHERE line_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone()[0]
+            if used:
+                raise ValueError('This line still has seed lots or plants: remove those first')
+        elif kind == 'lot':
+            if conn.execute('SELECT 1 FROM plants WHERE lot_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone():
+                raise ValueError('Plants were sown from this lot: remove them first, or mark the lot used up')
+        else:
+            if conn.execute('SELECT 1 FROM lots WHERE (from_plant_id = ? OR father_plant_id = ?) AND deleted_at IS NULL',
+                            (row['id'], row['id'])).fetchone():
+                raise ValueError('Seeds were harvested from this plant: it stays as their parent')
+        conn.execute(f'UPDATE {TABLE[kind]} SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (row['id'],))
+        _log(conn, kind, row['id'], person.username, f'deleted {row["code"]}')
+
+
+# --- reading --------------------------------------------------------------------------
+
+def _list(conn, person: Person, sql: str, args: list, kind: str, limit: int) -> List[dict]:
+    out = []
+    for r in conn.execute(sql, args):
+        if can_see(person, r):
+            out.append(_brief(conn, kind, r['id']))
+            if len(out) >= limit:
+                break
+    return out
+
+
+def list_lines(person: Person, q: str = '', limit: int = 300) -> List[dict]:
+    like = f'%{q.strip()}%'
+    with connect() as conn:
+        rows = conn.execute(
+            'SELECT l.*, (SELECT COUNT(*) FROM lots WHERE line_id = l.id AND deleted_at IS NULL) AS lot_count, '
+            '(SELECT COUNT(*) FROM plants WHERE line_id = l.id AND deleted_at IS NULL) AS plant_count, '
+            "(SELECT GROUP_CONCAT(name, ', ') FROM line_plasmids WHERE line_id = l.id) AS plasmids "
+            'FROM lines l WHERE l.deleted_at IS NULL AND (l.code LIKE ? OR l.name LIKE ? OR l.species LIKE ? '
+            'OR l.background LIKE ? OR l.description LIKE ? OR l.id IN (SELECT line_id FROM line_plasmids WHERE name LIKE ?)) '
+            'ORDER BY l.created_at DESC', (like, like, like, like, like, like)).fetchall()
+        return [{'id': r['id'], 'code': r['code'], 'name': r['name'], 'species': r['species'],
+                 'background': r['background'], 'line_kind': r['kind'], 'lots': r['lot_count'],
+                 'plants': r['plant_count'], 'plasmids': r['plasmids'] or '', 'lab': r['lab'],
+                 'created_by': r['created_by'], 'created_at': r['created_at']}
+                for r in rows if can_see(person, r)][:limit]
+
+
+def list_lots(person: Person, q: str = '', limit: int = 500) -> List[dict]:
+    like = f'%{q.strip()}%'
+    with connect() as conn:
+        rows = conn.execute(
+            'SELECT s.*, l.name AS line_name, l.code AS line_code, p.code AS plant_code, '
+            '(SELECT COUNT(*) FROM plants WHERE lot_id = s.id AND deleted_at IS NULL) AS sown '
+            'FROM lots s JOIN lines l ON l.id = s.line_id LEFT JOIN plants p ON p.id = s.from_plant_id '
+            'WHERE s.deleted_at IS NULL AND (s.code LIKE ? OR l.name LIKE ? OR l.code LIKE ? OR s.location LIKE ? '
+            'OR s.generation LIKE ? OR s.source LIKE ? OR s.notes LIKE ?) ORDER BY s.created_at DESC',
+            (like,) * 7).fetchall()
+        return [{'id': r['id'], 'code': r['code'], 'line': r['line_name'], 'line_code': r['line_code'],
+                 'generation': r['generation'], 'location': r['location'], 'amount': r['amount'],
+                 'zygosity': r['zygosity'], 'germination': r['germination'], 'used_up': bool(r['used_up']),
+                 'from_plant': r['plant_code'], 'source': r['source'], 'harvested_on': r['harvested_on'],
+                 'sown': r['sown'], 'lab': r['lab']}
+                for r in rows if can_see(person, r)][:limit]
+
+
+def list_plants(person: Person, q: str = '', limit: int = 500) -> List[dict]:
+    like = f'%{q.strip()}%'
+    with connect() as conn:
+        rows = conn.execute(
+            'SELECT p.*, l.name AS line_name, l.code AS line_code, s.code AS lot_code, s.generation '
+            'FROM plants p JOIN lines l ON l.id = p.line_id JOIN lots s ON s.id = p.lot_id '
+            'WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR l.name LIKE ? OR s.code LIKE ? OR p.location LIKE ? '
+            'OR p.status LIKE ? OR p.notes LIKE ?) ORDER BY p.created_at DESC, p.number', (like,) * 6).fetchall()
+        return [{'id': r['id'], 'code': r['code'], 'number': r['number'], 'line': r['line_name'],
+                 'line_code': r['line_code'], 'lot': r['lot_code'], 'generation': r['generation'],
+                 'status': r['status'], 'zygosity': r['zygosity'], 'selected': bool(r['selected']),
+                 'location': r['location'], 'sown_on': r['sown_on'], 'lab': r['lab']}
+                for r in rows if can_see(person, r)][:limit]
+
+
+def search(person: Person, q: str, limit: int = 20) -> List[dict]:
+    """Lines, lots and plants by code or name, for linking from elsewhere (the notebook)."""
+    q = (q or '').strip()
+    found = [dict(x, kind='line', label=f"{x['code']} {x['name']}") for x in list_lines(person, q, limit)]
+    found += [dict(x, kind='lot', label=f"{x['code']} {x['line']} {x['generation']}".strip()) for x in list_lots(person, q, limit)]
+    found += [dict(x, kind='plant', label=f"{x['code']} {x['line']} #{x['number']}") for x in list_plants(person, q, limit)]
+    exact = [f for f in found if f['code'].upper() == q.upper()]
+    return (exact + [f for f in found if f not in exact])[:limit]
+
+
+def _extras(conn, kind: str, record_id: str) -> Dict[str, Any]:
+    from app import attachments
+    obs = [dict(r) for r in conn.execute(
+        'SELECT id, observed_on, trait, value, notes, created_by, created_at FROM observations '
+        'WHERE record_kind = ? AND record_id = ? AND deleted_at IS NULL ORDER BY COALESCE(observed_on, created_at) DESC',
+        (kind, record_id))]
+    for o in obs:
+        o['attachments'] = attachments.listed(conn, 'observation', o['id'])
+    return {
+        'observations': obs,
+        'attachments': attachments.listed(conn, kind, record_id),
+        'changes': [dict(r) for r in conn.execute(
+            'SELECT changed_by, changed_at, what FROM changes WHERE record_kind = ? AND record_id = ? '
+            'ORDER BY rowid DESC LIMIT 200', (kind, record_id))],
+    }
+
+
+def line_detail(person: Person, ident: str) -> dict:
+    with connect() as conn:
+        row = visible(conn, person, 'line', ident)
+        parents = [dict(_brief(conn, 'line', r['parent_id']), role=r['role']) for r in conn.execute(
+            'SELECT parent_id, role FROM line_parents WHERE line_id = ?', (row['id'],))]
+        children = [dict(_brief(conn, 'line', r['line_id']), role=r['role']) for r in conn.execute(
+            'SELECT lp.line_id, lp.role FROM line_parents lp JOIN lines l ON l.id = lp.line_id '
+            'WHERE lp.parent_id = ? AND l.deleted_at IS NULL', (row['id'],))]
+        lots = [_brief(conn, 'lot', r['id']) for r in conn.execute(
+            'SELECT id FROM lots WHERE line_id = ? AND deleted_at IS NULL ORDER BY created_at', (row['id'],))]
+        out = {**dict(row), 'line_kind': row['kind'], 'kind': 'line',
+               'parents': [p for p in parents if p], 'children': [c for c in children if c],
+               'plasmids': [dict(r) for r in conn.execute(
+                   'SELECT plasmid_id AS id, name FROM line_plasmids WHERE line_id = ? ORDER BY name', (row['id'],))],
+               'lots': lots, 'pedigree': _pedigree(conn, row['id']), **_extras(conn, 'line', row['id'])}
+        out.pop('data', None)
+        return out
+
+
+def _pedigree(conn, line_id: str, depth: int = 0) -> dict:
+    """A line and its parent lines, and theirs, as a tree."""
+    line = _brief(conn, 'line', line_id)
+    if depth >= 8 or line is None:
+        return line or {}
+    line['parents'] = [dict(_pedigree(conn, r['parent_id'], depth + 1), role=r['role']) for r in conn.execute(
+        'SELECT parent_id, role FROM line_parents WHERE line_id = ?', (line_id,))]
+    return line
+
+
+def lot_detail(person: Person, ident: str) -> dict:
+    with connect() as conn:
+        row = visible(conn, person, 'lot', ident)
+        tests = []
+        for t in conn.execute('SELECT * FROM seg_tests WHERE lot_id = ? AND deleted_at IS NULL '
+                              'ORDER BY COALESCE(tested_on, created_at) DESC', (row['id'],)):
+            tests.append({**dict(t), **stats.assess(t['resistant'], t['sensitive'], t['expected'])})
+        plants = [dict(_brief(conn, 'plant', r['id']), zygosity=r['zygosity'], selected=bool(r['selected']),
+                       location=r['location'], harvested=[_brief(conn, 'lot', h['id']) for h in conn.execute(
+                           'SELECT id FROM lots WHERE from_plant_id = ? AND deleted_at IS NULL', (r['id'],))])
+                  for r in conn.execute('SELECT * FROM plants WHERE lot_id = ? AND deleted_at IS NULL ORDER BY number',
+                                        (row['id'],))]
+        return {**dict(row), 'kind': 'lot', 'line': _brief(conn, 'line', row['line_id']),
+                'from_plant': _brief(conn, 'plant', row['from_plant_id']),
+                'father_plant': _brief(conn, 'plant', row['father_plant_id']),
+                'used_up': bool(row['used_up']), 'plants': plants, 'seg_tests': tests,
+                'next_generation': next_generation(row['generation']),
+                'ancestry': _ancestry(conn, 'lot', row['id']), 'descendants': _descendants(conn, 'lot', row['id']),
+                **_extras(conn, 'lot', row['id'])}
+
+
+def plant_detail(person: Person, ident: str) -> dict:
+    with connect() as conn:
+        row = visible(conn, person, 'plant', ident)
+        lot = _brief(conn, 'lot', row['lot_id'])
+        harvested = [_brief(conn, 'lot', r['id']) for r in conn.execute(
+            'SELECT id FROM lots WHERE (from_plant_id = ? OR father_plant_id = ?) AND deleted_at IS NULL',
+            (row['id'], row['id']))]
+        siblings = [_brief(conn, 'plant', r['id']) for r in conn.execute(
+            'SELECT id FROM plants WHERE lot_id = ? AND id != ? AND deleted_at IS NULL ORDER BY number',
+            (row['lot_id'], row['id']))]
+        return {**dict(row), 'kind': 'plant', 'selected': bool(row['selected']),
+                'line': _brief(conn, 'line', row['line_id']), 'lot': lot, 'harvested': harvested,
+                'siblings': siblings, 'next_generation': next_generation(lot['generation'] if lot else ''),
+                'ancestry': _ancestry(conn, 'plant', row['id']), 'descendants': _descendants(conn, 'plant', row['id']),
+                **_extras(conn, 'plant', row['id'])}
+
+
+def _ancestry(conn, kind: str, record_id: str, limit: int = 40) -> List[dict]:
+    """
+    From a lot or plant back through the plants and lots it came from, nearest
+    first: plant -> the lot it was sown from -> the plant that lot was harvested
+    from -> ... A cross's lot lists its father, then follows its mother.
+    """
+    chain, seen = [], set()
+    while record_id and len(chain) < limit and (kind, record_id) not in seen:
+        seen.add((kind, record_id))
+        if kind == 'plant':
+            row = conn.execute('SELECT lot_id FROM plants WHERE id = ?', (record_id,)).fetchone()
+            if not row:
+                break
+            kind, record_id = 'lot', row['lot_id']
+            chain.append(_brief(conn, 'lot', record_id))
+        else:
+            row = conn.execute('SELECT from_plant_id, father_plant_id FROM lots WHERE id = ?', (record_id,)).fetchone()
+            if not row or not row['from_plant_id']:
+                break                      # from outside: a stock centre, a colleague
+            if row['father_plant_id']:
+                chain.append(dict(_brief(conn, 'plant', row['father_plant_id']), role='father'))
+            kind, record_id = 'plant', row['from_plant_id']
+            chain.append(dict(_brief(conn, 'plant', record_id), role='mother' if row['father_plant_id'] else 'parent'))
+    return [c for c in chain if c]
+
+
+def _descendants(conn, kind: str, record_id: str, depth: int = 0, budget: Optional[list] = None) -> List[dict]:
+    """What came from a lot or plant: plants sown, lots harvested, and so on (a tree)."""
+    budget = budget if budget is not None else [300]
+    if depth > 12 or budget[0] <= 0:
+        return []
+    if kind == 'lot':
+        rows = conn.execute('SELECT id FROM plants WHERE lot_id = ? AND deleted_at IS NULL ORDER BY number', (record_id,))
+        child_kind = 'plant'
+    else:
+        rows = conn.execute('SELECT id FROM lots WHERE (from_plant_id = ? OR father_plant_id = ?) AND deleted_at IS NULL '
+                            'ORDER BY created_at', (record_id, record_id))
+        child_kind = 'lot'
+    out = []
+    for r in rows.fetchall():
+        budget[0] -= 1
+        if budget[0] < 0:
+            break
+        node = _brief(conn, child_kind, r['id'])
+        node['children'] = _descendants(conn, child_kind, r['id'], depth + 1, budget)
+        out.append(node)
+    return out
+
+
+def detail(person: Person, kind: str, ident: str) -> dict:
+    return {'line': line_detail, 'lot': lot_detail, 'plant': plant_detail}[kind](person, ident)
+
+
+def lines_with_plasmid(person: Person, plasmid_id: str) -> List[dict]:
+    with connect() as conn:
+        rows = conn.execute('SELECT l.* FROM line_plasmids lp JOIN lines l ON l.id = lp.line_id '
+                            'WHERE lp.plasmid_id = ? AND l.deleted_at IS NULL', (plasmid_id,)).fetchall()
+        return [_brief(conn, 'line', r['id']) for r in rows if can_see(person, r)]
+

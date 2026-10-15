@@ -1,0 +1,5 @@
+# Web framework
+Flask==3.0.3
+
+# Testing
+pytest==8.3.4
