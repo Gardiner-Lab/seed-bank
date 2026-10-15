@@ -5,6 +5,15 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Every code starts with its lab's code**, so no two labs' codes are ever the same and you can
+  tell from a code whose it is: GL-L-0001 a line, GL-S-0042 a seed lot, GL-P-0012 a plant.
+  - Each lab numbers from 1.
+  - A lab's code comes from its initials (Gardiner Lab → GL). A clash gets a number (Green Lab → GL2).
+  - The lab lead or an admin can choose the code before the lab's first record. After that it is
+    fixed, as codes on labels never change.
+  - Codes made before this (S-0001) keep working everywhere.
+
 ## [0.1.0] - 2026-10-15
 
 The first release.

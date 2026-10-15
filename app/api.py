@@ -47,6 +47,18 @@ def me(person):
                     'ratios': list(stats.RATIOS)})
 
 
+@api.get('/lab')
+@signed_in
+def get_lab(person):
+    return jsonify(records.lab_info(person))
+
+
+@api.put('/lab')
+@signed_in
+def put_lab(person):
+    return jsonify(records.set_lab_code(person, str(_body().get('code') or '')))
+
+
 @api.get('/lines')
 @signed_in
 def list_lines(person):

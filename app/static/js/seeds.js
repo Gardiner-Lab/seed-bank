@@ -193,6 +193,7 @@ const App = {
   async init() {
     try {
       this.meta = await api('GET', '/me');
+      this.lab = await api('GET', '/lab');
     } catch (err) {
       put(document.getElementById('main'), el('p', { class: 'empty' }, err.message));
       return;
@@ -238,6 +239,7 @@ const App = {
           view === 'lines' ? el('button', { class: 'btn btn-primary', onclick: () => this.editLine() }, '＋ New line') : null,
           view === 'lots' ? el('button', { class: 'btn btn-primary', onclick: () => this.newLot() }, '＋ Seed lot') : null,
           labelBtn)),
+      this.labCodeLine(),
       el('p', { class: 'hint' }, {
         lines: 'Wild types, mutants, transgenic events and crosses, with the plasmids they carry. Open one for its seed lots and pedigree.',
         lots: 'Seeds as they are kept. Sow plants from a lot; plants are harvested into the next generation.',
@@ -247,6 +249,21 @@ const App = {
     await draw();
     this.onSelection();
     query.focus();
+  },
+
+  /** Which code this lab's records start with, and a way to choose it before the first one. */
+  labCodeLine() {
+    const lab = this.lab;
+    if (!lab) return null;
+    return el('p', { class: 'lab-code-line' },
+      'Codes in ', el('b', {}, lab.lab.startsWith('user:') ? 'your own stocks' : lab.lab), ' start with ',
+      el('span', { class: 'code-badge' }, `${lab.code}-`), ` (${lab.code}-L lines, ${lab.code}-S seed lots, ${lab.code}-P plants)`,
+      lab.can_change ? el('button', { class: 'btn btn-secondary btn-sm', style: 'margin-left:.6rem', onclick: () => formModal({
+        title: 'Choose the lab code',
+        intro: 'Every code your lab makes starts with it, so no two labs\' codes are ever the same. It can be chosen until the lab\'s first record; after that it is fixed, as codes on labels never change.',
+        fields: [{ name: 'code', label: 'Lab code', value: lab.code, placeholder: 'e.g. GL, GARD', hint: '1 to 6 letters and digits, starting with a letter.' }],
+        submit: async (v) => { this.lab = await api('PUT', '/lab', v); this.route(); },
+      }) }, 'Change…') : null);
   },
 
   pick(code) {

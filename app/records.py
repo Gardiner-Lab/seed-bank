@@ -53,12 +53,75 @@ def _new_id() -> str:
     return secrets.token_hex(12)
 
 
-def _code(conn, kind: str) -> str:
-    prefix = PREFIX[kind]
+LAB_CODE = re.compile(r'[A-Z][A-Z0-9]{0,5}')
+
+
+def _suggest_lab_code(lab: str) -> str:
+    """A lab's initials (Gardiner Lab -> GL); a person without a lab, their name's first letters."""
+    if lab.startswith('user:'):
+        letters = re.sub(r'[^A-Za-z]', '', lab[5:])[:3]
+    else:
+        words = re.findall(r'[A-Za-z0-9]+', lab)
+        letters = ''.join(w[0] for w in words if w[0].isalpha())[:4]
+        if len(letters) < 2:
+            letters = re.sub(r'[^A-Za-z]', '', lab)[:3]
+    return (letters or 'LAB').upper()
+
+
+def lab_code(conn, lab: str) -> str:
+    """The lab's code, given it the first time it is needed, and never the same as another lab's."""
+    row = conn.execute('SELECT code FROM lab_codes WHERE lab = ?', (lab,)).fetchone()
+    if row:
+        return row['code']
+    base = _suggest_lab_code(lab)
+    code, n = base, 2
+    while conn.execute('SELECT 1 FROM lab_codes WHERE code = ?', (code,)).fetchone():
+        code, n = f'{base[:5]}{n}', n + 1
+    conn.execute('INSERT INTO lab_codes (lab, code) VALUES (?, ?)', (lab, code))
+    return code
+
+
+def _code(conn, kind: str, lab: str) -> str:
+    """The next code in this lab for this kind of record: GL-S-0042."""
+    prefix = f'{lab_code(conn, lab)}-{PREFIX[kind]}'
     conn.execute('INSERT INTO counters (prefix, value) VALUES (?, 1) '
                  'ON CONFLICT(prefix) DO UPDATE SET value = value + 1', (prefix,))
     n = conn.execute('SELECT value FROM counters WHERE prefix = ?', (prefix,)).fetchone()[0]
     return f'{prefix}-{n:04d}'
+
+
+def _lab_has_records(conn, lab: str) -> bool:
+    return any(conn.execute(f'SELECT 1 FROM {t} WHERE lab = ? LIMIT 1', (lab,)).fetchone()
+               for t in ('lines', 'lots', 'plants'))
+
+
+def lab_info(person: Person) -> dict:
+    lab = lab_of(person)
+    with connect() as conn:
+        code = lab_code(conn, lab)
+        fixed = _lab_has_records(conn, lab)
+    return {'lab': lab, 'code': code, 'fixed': fixed,
+            'can_change': not fixed and (person.is_admin or person.is_lab_lead or lab.startswith('user:'))}
+
+
+def set_lab_code(person: Person, code: str) -> dict:
+    """Choose the lab's code, before it has any records: a lab lead, an admin, or someone without a lab."""
+    lab = lab_of(person)
+    code = (code or '').strip().upper()
+    if not LAB_CODE.fullmatch(code):
+        raise ValueError('A lab code is 1 to 6 letters and digits, starting with a letter, e.g. GL or GARD')
+    if not (person.is_admin or person.is_lab_lead or lab.startswith('user:')):
+        raise Forbidden("Only the lab's lead or an administrator chooses the lab's code")
+    with connect() as conn:
+        if _lab_has_records(conn, lab):
+            raise ValueError('The lab already has records: its code is fixed, as codes on labels never change')
+        taken = conn.execute('SELECT lab FROM lab_codes WHERE code = ? AND lab != ?', (code, lab)).fetchone()
+        if taken:
+            raise ValueError(f'{code} is already another lab\'s code')
+        conn.execute('INSERT INTO lab_codes (lab, code, set_by) VALUES (?, ?, ?) '
+                     'ON CONFLICT(lab) DO UPDATE SET code = excluded.code, set_by = excluded.set_by, '
+                     'set_at = CURRENT_TIMESTAMP', (lab, code, person.username))
+    return lab_info(person)
 
 
 def _log(conn, kind: str, record_id: str, by: str, what: str) -> None:
@@ -86,8 +149,8 @@ def next_generation(generation: str) -> str:
 
 
 def kind_of(ident: str) -> Optional[str]:
-    """What a code names: L-0001 a line, S-0001 a seed lot, P-0001 a plant."""
-    m = re.fullmatch(r'([LSP])-\d+', (ident or '').strip().upper())
+    """What a code names: GL-L-0001 a line, GL-S-0001 a seed lot, GL-P-0001 a plant (S-0001 too)."""
+    m = re.fullmatch(r'(?:[A-Z][A-Z0-9]{0,5}-)?([LSP])-\d+', (ident or '').strip().upper())
     return KIND_OF_PREFIX[m.group(1)] if m else None
 
 
@@ -156,7 +219,7 @@ def create_line(person: Person, data: dict) -> str:
     fields = _line_fields(data)
     with connect() as conn:
         line_id = _new_id()
-        code = _code(conn, 'line')
+        code = _code(conn, 'line', lab_of(person))
         conn.execute('INSERT INTO lines (id, code, lab, name, species, background, kind, description, created_by) '
                      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                      (line_id, code, lab_of(person), fields['name'], fields['species'], fields['background'],
@@ -272,7 +335,7 @@ def create_lot(person: Person, data: dict, *, from_plant: Optional[str] = None,
         if line_id is None:
             line_id = visible(conn, person, 'line', _text(data.get('line')))['id']
         lot_id = _new_id()
-        code = _code(conn, 'lot')
+        code = _code(conn, 'lot', lab_of(person))
         conn.execute('INSERT INTO lots (id, code, lab, line_id, generation, from_plant_id, father_plant_id, source, '
                      'harvested_on, amount, location, germination, zygosity, notes, created_by) '
                      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -323,7 +386,7 @@ def sow(person: Person, lot_ident: str, data: dict) -> List[str]:
             plant_id = _new_id()
             conn.execute('INSERT INTO plants (id, code, lab, lot_id, line_id, number, sown_on, location, created_by) '
                          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                         (plant_id, _code(conn, 'plant'), lot['lab'], lot['id'], lot['line_id'], start + i,
+                         (plant_id, _code(conn, 'plant', lot['lab']), lot['lab'], lot['id'], lot['line_id'], start + i,
                           sown_on, location, person.username))
             made.append(plant_id)
         _log(conn, 'lot', lot['id'], person.username, f'sowed {count} plant{"s" if count > 1 else ""}'

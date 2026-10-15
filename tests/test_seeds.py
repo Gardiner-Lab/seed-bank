@@ -31,10 +31,10 @@ def test_from_stock_centre_seeds_to_a_homozygous_t3_line(as_user):
     """The whole transformation route: dip, select T1s, found lines, test T2s, find a homozygous T3."""
     ana = as_user('ana')
     col = _line(ana, 'Col-0', kind='wild type', background='Col-0')
-    assert col['code'] == 'L-0001'
+    assert col['code'] == 'GL-L-0001', 'Gardiner Lab: GL'
     nasc = _lot(ana, col['code'], generation='', source='NASC N1092', amount='~2000 seeds',
                 location='Freezer 2 / box 4 / A1', germination=98)
-    assert nasc['code'] == 'S-0001' and nasc['from_plant'] is None
+    assert nasc['code'] == 'GL-S-0001' and nasc['from_plant'] is None
 
     # Transformed with a plasmid: a population line whose T1 seeds came from dipped Col-0 plants.
     dipped = _ok(ana.post(f"/api/lots/{nasc['code']}/sow", json={'count': 6, 'sown_on': '2026-07-01',
@@ -253,3 +253,77 @@ def test_a_lot_in_the_wrong_line_can_be_moved_until_it_is_sown(as_user):
 def test_the_help_page(as_user):
     page = as_user('ana').get('/help')
     assert page.status_code == 200 and b'Golden rules' in page.data and b'Found a line' in page.data
+
+
+
+def test_each_lab_has_its_own_code_and_numbering(as_user, world):
+    import sqlite3
+    ana, zoe, lead = as_user('ana'), as_user('zoe'), as_user('lead')
+    # A third lab whose initials clash with Gardiner Lab's.
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.execute("INSERT INTO labs VALUES (3, 'Green Lab')")
+    conn.execute("INSERT INTO members VALUES ('gil', 3, 'lab_lead')")
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(world['paths']['moclo'])
+    conn.execute("INSERT INTO users VALUES ('gil', 'gil', 0)")
+    conn.commit()
+    conn.close()
+    gil = as_user('gil')
+
+    # Before its first record, a lab's lead chooses its code; members cannot.
+    assert _ok(lead.get('/api/lab'))['code'] == 'GL' and _ok(lead.get('/api/lab'))['can_change'] is True
+    assert ana.put('/api/lab', json={'code': 'GARD'}).status_code == 403
+    assert lead.put('/api/lab', json={'code': '1X'}).status_code == 400
+    assert _ok(lead.put('/api/lab', json={'code': 'gard'}))['code'] == 'GARD'
+
+    a1 = _line(ana, 'Col-0')
+    a2 = _line(ana, 'Ler-0')
+    z1 = _line(zoe, 'Col-0')
+    g1 = _line(gil, 'Col-0')
+    assert (a1['code'], a2['code']) == ('GARD-L-0001', 'GARD-L-0002')
+    assert z1['code'] == 'OL-L-0001', 'Other Lab numbers from 1 too'
+    assert g1['code'] == 'GL-L-0001', 'Green Lab gets GL now that Gardiner Lab is GARD'
+    # Once a lab has records, its code is fixed.
+    lab = _ok(lead.get('/api/lab'))
+    assert lab['fixed'] is True and lab['can_change'] is False
+    assert lead.put('/api/lab', json={'code': 'GDL'}).status_code == 400
+    # A code another lab holds cannot be taken.
+    assert as_user('boss').put('/api/lab', json={'code': 'OL'}).status_code == 400
+
+    lot = _lot(ana, a1['code'])
+    plants = _ok(ana.post(f"/api/lots/{lot['code']}/sow", json={'count': 2}), 201)['record']['plants']
+    assert lot['code'] == 'GARD-S-0001' and [p['code'] for p in plants] == ['GARD-P-0001', 'GARD-P-0002']
+    # Codes are found however they are typed, and the kind is read from them.
+    assert _ok(ana.get('/api/lot/gard-s-0001'))['record']['code'] == 'GARD-S-0001'
+    from app import records
+    assert [records.kind_of(c) for c in ('GARD-S-0001', 'GL-P-0002', 'L-0003', 'X')] == ['lot', 'plant', 'line', None]
+    assert _ok(ana.get('/api/search?q=GARD-S-0001'))['results'][0]['code'] == 'GARD-S-0001'
+
+
+def test_initials_clash_between_labs_is_resolved(as_user, world):
+    import sqlite3
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.execute("INSERT INTO labs VALUES (3, 'Green Lab')")
+    conn.execute("INSERT INTO members VALUES ('gil', 3, 'member')")
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(world['paths']['moclo'])
+    conn.execute("INSERT INTO users VALUES ('gil', 'gil', 0)")
+    conn.commit()
+    conn.close()
+    first = _line(as_user('ana'), 'Col-0')['code']
+    second = _line(as_user('gil'), 'Col-0')['code']
+    assert (first, second) == ('GL-L-0001', 'GL2-L-0001')
+
+
+def test_codes_made_before_lab_codes_still_work(as_user, world):
+    import sqlite3
+    ana = as_user('ana')
+    line = _line(ana, 'Col-0')
+    conn = sqlite3.connect(world['paths']['seeds'])
+    conn.execute("UPDATE lines SET code = 'L-0007' WHERE id = ?", (line['id'],))
+    conn.commit()
+    conn.close()
+    assert _ok(ana.get('/api/line/L-0007'))['record']['name'] == 'Col-0'
+    assert _lot(ana, 'L-0007')['line']['code'] == 'L-0007'

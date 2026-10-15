@@ -6,6 +6,8 @@
 
 const SB = window.SB;
 const KIND = { L: 'line', S: 'lot', P: 'plant' };
+// GL-S-0001 (or S-0001): the letter before the number says what it is.
+const kindOf = (code) => KIND[code.split('-').slice(-2, -1)[0]];
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -53,7 +55,7 @@ async function main() {
     + (['localhost', '127.0.0.1', '::1'].includes(host)
       ? ' This is this computer\'s own address, which phones cannot reach: open this page through the server\'s name (e.g. http://UU115629:8080), or set SUITE_PUBLIC_URL for the suite.' : '');
   for (const code of codes) {
-    const kind = KIND[code[0]];
+    const kind = kindOf(code);
     if (!kind) continue;
     try {
       const res = await fetch(`${SB.base}/api/${kind}/${encodeURIComponent(code)}`, { credentials: 'same-origin' });

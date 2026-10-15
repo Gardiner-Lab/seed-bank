@@ -38,6 +38,7 @@ a { color: var(--primary); }
 .actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
 .crumbs a { color: var(--muted); text-decoration: none; font-size: .85rem; }
 .code-badge { font-family: ui-monospace, monospace; background: var(--accent-soft); color: #166534; border-radius: .35rem; padding: 0 .4rem; }
+.lab-code-line { font-size: .88rem; color: var(--muted); margin: .2rem 0 0; }
 .list-search { font: inherit; width: 100%; padding: .55rem .75rem; border: 1px solid var(--border); border-radius: .45rem; margin: .4rem 0 .8rem; }
 
 .btn { font: inherit; font-size: .9rem; padding: .4rem .8rem; border-radius: .4rem; cursor: pointer; border: 1px solid transparent;

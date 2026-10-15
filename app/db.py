@@ -13,7 +13,10 @@ The seed bank's database.
     changes       who changed what, and when, on every record
 
 Records belong to a lab: everyone in it sees and adds to them, other labs do
-not see them. Codes (L-0001, S-0001, P-0001) are short enough for a label.
+not see them. Codes start with the lab's own code and say what they are:
+GL-L-0001 a line, GL-S-0001 a seed lot, GL-P-0001 a plant; short enough for a
+label, and never the same in two labs. (Codes made before lab codes, S-0001,
+keep working.)
 """
 
 import os
@@ -153,10 +156,20 @@ CREATE TABLE IF NOT EXISTS changes (
 );
 CREATE INDEX IF NOT EXISTS idx_changes_record ON changes(record_kind, record_id);
 
--- The next number for each kind of code.
+-- The next number for each kind of code, per lab ("GL-S" for Gardiner Lab's seed lots).
 CREATE TABLE IF NOT EXISTS counters (
     prefix TEXT PRIMARY KEY,
     value INTEGER NOT NULL
+);
+
+-- Each lab's code, which starts every code it makes: GL-S-0001. Unique, so no
+-- two labs' codes can be the same; fixed once the lab has records, as codes
+-- on printed labels never change.
+CREATE TABLE IF NOT EXISTS lab_codes (
+    lab TEXT PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    set_by TEXT,
+    set_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
 
