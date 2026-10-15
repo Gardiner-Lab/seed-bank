@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-15
+
 ### Changed
 - **Every code starts with its lab's code**, so no two labs' codes are ever the same and you can
   tell from a code whose it is: GL-L-0001 a line, GL-S-0042 a seed lot, GL-P-0012 a plant.
