@@ -26,6 +26,7 @@
         <a href="{{ links.editor }}/editor" target="_blank" rel="noopener">Plasmid Editor ↗</a>
         <a href="{{ request.script_root }}/about">About</a>
     </nav>
+    <a class="help-button" href="{{ request.script_root }}/help" title="How to enter seeds, plants and lines">❓ Help</a>
     <span class="topbar-user">{{ person.username }}{% if person.lab %} · {{ person.lab }}{% endif %}{% if person.role == 'admin' %} · admin{% endif %}</span>
     <a class="topbar-logout" href="{{ links.logout }}">Log out</a>
 </header>

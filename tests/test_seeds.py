@@ -218,3 +218,38 @@ def test_plasmids_and_notebook_mentions(as_user, world):
     # Search for the notebook's link picker: by code first.
     results = _ok(ana.get(f"/api/search?q={lot['code']}"))['results']
     assert results[0]['code'] == lot['code'] and results[0]['kind'] == 'lot'
+
+
+def test_seeds_of_a_dipped_plant_go_to_the_transgenic_line(as_user):
+    """Transformation, exactly: Col-0 plants dipped, their seeds the T1 of the new line, traced back."""
+    ana = as_user('ana')
+    col = _line(ana, 'Col-0', kind='wild type')
+    nasc = _lot(ana, col['code'], source='NASC N1092')
+    dipped = _ok(ana.post(f"/api/lots/{nasc['code']}/sow", json={'count': 2}), 201)['record']['plants'][0]
+    gfp = _line(ana, '35S:GFP', kind='population', plasmids=[{'id': 'p1', 'name': 'pGreen-35S-GFP'}])
+    t1 = _ok(ana.post(f"/api/plants/{dipped['code']}/harvest", json={'line': gfp['code']}), 201)['record']
+    assert (t1['line']['code'], t1['generation'], t1['from_plant']['code']) == (gfp['code'], 'T1', dipped['code'])
+    assert [n['code'] for n in t1['ancestry']] == [dipped['code'], nasc['code']]
+    # Without a line, a harvest stays in the plant's own line, one generation on.
+    other = _ok(ana.post(f"/api/lots/{nasc['code']}/sow", json={'count': 1}), 201)['record']['plants'][0]
+    own = _ok(ana.post(f"/api/plants/{other['code']}/harvest", json={}), 201)['record']
+    assert own['line']['code'] == col['code']
+    # Another lab's line is not a place to put seeds.
+    zl = _line(as_user('zoe'), 'Theirs')
+    assert ana.post(f"/api/plants/{other['code']}/harvest", json={'line': zl['code']}).status_code == 404
+
+
+def test_a_lot_in_the_wrong_line_can_be_moved_until_it_is_sown(as_user):
+    ana = as_user('ana')
+    right, wrong = _line(ana, 'Right'), _line(ana, 'Wrong')
+    lot = _lot(ana, wrong['code'])
+    moved = _ok(ana.put(f"/api/lots/{lot['code']}", json={'line': right['code']}))['record']
+    assert moved['line']['code'] == right['code']
+    assert any(f"line: {wrong['code']} → {right['code']}" in c['what'] for c in moved['changes'])
+    ana.post(f"/api/lots/{lot['code']}/sow", json={'count': 1})
+    assert ana.put(f"/api/lots/{lot['code']}", json={'line': wrong['code']}).status_code == 400
+
+
+def test_the_help_page(as_user):
+    page = as_user('ana').get('/help')
+    assert page.status_code == 200 and b'Golden rules' in page.data and b'Found a line' in page.data

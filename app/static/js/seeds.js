@@ -242,7 +242,7 @@ const App = {
         lines: 'Wild types, mutants, transgenic events and crosses, with the plasmids they carry. Open one for its seed lots and pedigree.',
         lots: 'Seeds as they are kept. Sow plants from a lot; plants are harvested into the next generation.',
         plants: 'Each plant sown, numbered within its lot. Record phenotypes with photos; harvest, cross, or found a line.',
-      }[view]),
+      }[view], ' ', el('a', { href: url('/help') }, 'How to enter things so they can be traced →')),
       query, table);
     await draw();
     this.onSelection();
@@ -256,7 +256,11 @@ const App = {
   },
 
   listTable(view, rows) {
-    if (!rows.length) return el('p', { class: 'empty' }, 'Nothing here yet.');
+    if (!rows.length) {
+      return el('div', { class: 'empty' }, el('p', {}, 'Nothing here yet.'),
+        el('p', {}, 'New to the seed bank? ', el('a', { href: url('/help') }, 'Read how to enter seeds, plants and lines'),
+          ' first: it takes five minutes, and it is what makes the lineage work.'));
+    }
     const head = {
       lines: ['', 'Code', 'Name', 'Kind', 'Species', 'Plasmids', 'Seed lots', 'Plants'],
       lots: ['', 'Code', 'Line', 'Gen.', 'From', 'Location', 'Amount', 'Zygosity', 'Germ.', 'Sown'],
@@ -487,7 +491,10 @@ const App = {
           el('button', { class: 'btn btn-primary', onclick: () => this.sow(rec) }, '🌱 Sow…'),
           el('button', { class: 'btn btn-secondary', onclick: () => this.segTest(rec) }, '🧮 Segregation test…'),
           el('button', { class: 'btn btn-secondary', onclick: () => formModal({
-            title: `Edit ${rec.code}`, fields: [...this.lotFields(rec), { name: 'used_up', label: 'Used up', type: 'checkbox', value: rec.used_up }],
+            title: `Edit ${rec.code}`,
+            fields: [...(rec.plants.length ? [] : [{ name: 'line', label: 'Line (code)', value: rec.line?.code,
+              hint: 'Correct it if the seeds were put in the wrong line. Possible until plants are sown from this lot.' }]),
+            ...this.lotFields(rec), { name: 'used_up', label: 'Used up', type: 'checkbox', value: rec.used_up }],
             submit: async (v) => { await api('PUT', `/lots/${rec.code}`, v); this.reload(); },
           }) }, '✎ Edit')]),
       this.ancestry(rec),
@@ -607,15 +614,28 @@ const App = {
   harvest(rec) {
     formModal({
       title: `Harvest ${rec.code} (${rec.line?.name} #${rec.number})`,
-      intro: 'A new seed lot of this plant\'s line. The plant is marked harvested.',
-      fields: [{ name: 'generation', label: 'Generation', value: rec.next_generation, placeholder: 'e.g. T3' },
+      intro: 'A new seed lot from this one plant. The plant is marked harvested. See Help for transformations and bulk harvests.',
+      fields: [{ name: 'into', label: 'Seeds belong to', type: 'select', value: '', options: [
+        ['', `${rec.line?.code} ${rec.line?.name}: this plant's own line`],
+        ['other', 'Another line: this plant was transformed (dipped), its seeds are T1 of a transgenic line…']] },
+        { name: 'generation', label: 'Generation', value: rec.next_generation, placeholder: 'e.g. T3', hint: 'Suggested: one on from the lot it was sown from. T1 for seeds of a dipped plant.' },
         { name: 'harvested_on', label: 'Harvested on', type: 'date', value: today() },
         { name: 'amount', label: 'Amount', placeholder: 'e.g. 200 mg' },
         { name: 'location', label: 'Kept in', placeholder: 'e.g. Freezer 2 / box 5 / C3' },
         { name: 'notes', label: 'Notes', type: 'textarea' }],
       label: 'Harvest',
       submit: async (v) => {
-        const { record } = await api('POST', `/plants/${rec.code}/harvest`, v);
+        const { into, ...data } = v;
+        if (into === 'other') {
+          const line = await picker({ title: 'Which transgenic line are these seeds?', placeholder: 'Search lines, e.g. 35S:GFP',
+            search: async (q) => (await api('GET', `/lines?q=${encodeURIComponent(q)}`)).lines.filter((x) => x.code !== rec.line?.code),
+            describe: (x) => [el('b', {}, `${x.code} ${x.name}`), el('span', { class: 'hint' }, ` · ${x.line_kind}${x.plasmids ? ` · ${x.plasmids}` : ''}`)] });
+          if (!line) return false;
+          data.line = line.code;
+          // The generation suggested was this plant's own; a dipped plant's seeds are T1.
+          if (data.generation === rec.next_generation) data.generation = 'T1';
+        }
+        const { record } = await api('POST', `/plants/${rec.code}/harvest`, data);
         toast(`Harvested into ${record.code}`, 'success');
         location.hash = `lot=${record.code}`;
       },

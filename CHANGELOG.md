@@ -10,7 +10,15 @@ and the project uses [semantic versioning](https://semver.org/).
 The first release.
 
 ### Added
+- **Help**: how to enter seeds, plants and lines so they can be traced.
+  - The three records, and golden rules.
+  - Step-by-step routes: seeds from outside, a transformation from dipping to a homozygous T3, a cross.
+  - Phenotypes, storage, special cases such as bulk harvests, and fixing mistakes.
+  - Linked from the top bar and from empty lists.
 - Lines, seed lots and plants, with lineage traced plant by plant, and line pedigrees.
+- Harvest a dipped plant **into the transgenic line**: its seeds become that line's T1, traced back to
+  the plant.
+- A seed lot put in the wrong line can be moved to the right one, until plants are sown from it.
 - Sow, harvest (the next generation), cross (a new line and its F1 lot), and found a line from a
   plant (an independent T1 transformant).
 - Plasmids carried by each line, from the Plasmid Editor's library.

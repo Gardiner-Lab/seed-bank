@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Help · Seed Bank</title>
+    <link rel="stylesheet" href="{{ request.script_root }}/static/css/seeds.css?v={{ version }}">
+</head>
+<body>
+<header class="topbar">
+    <a class="topbar-back" href="{{ request.script_root }}/">← Seed Bank</a>
+    <span class="topbar-title">🌱 Seed Bank · Help</span>
+</header>
+<main class="help">
+    <h1>How to enter seeds, plants and lines</h1>
+    <p class="lead">The seed bank can only trace where a seed came from if every step is recorded as it
+       happens, the same way by everyone. This page explains the three kinds of record, then the
+       steps for the usual routes: seeds from a stock centre, a transformation from T1 to a
+       homozygous T3, and a cross.</p>
+
+    <nav class="help-toc">
+        <a href="#records">The three records</a>
+        <a href="#rules">Golden rules</a>
+        <a href="#stock">Seeds from outside</a>
+        <a href="#growing">Sowing and labels</a>
+        <a href="#transform">A transformation, T0 to T3</a>
+        <a href="#cross">A cross</a>
+        <a href="#phenotypes">Phenotypes, photos and 3D scans</a>
+        <a href="#storage">Storage and stock</a>
+        <a href="#notebook">Plasmids and the notebook</a>
+        <a href="#special">Special cases</a>
+        <a href="#mistakes">Fixing mistakes</a>
+    </nav>
+
+    <section id="records">
+        <h2>The three records</h2>
+        <div class="help-cards">
+            <div class="help-card">
+                <h3>🧬 Line <code>L-0001</code></h3>
+                <p>A <b>genetic identity</b>: what the plants <i>are</i>. Col-0, <i>myb21-1</i>, the transgenic
+                   event 35S:GFP-4, the cross gfp-4 × myb21.</p>
+                <p>A line does <b>not</b> change from one generation to the next: the T2, T3 and T4 of
+                   35S:GFP-4 are all the one line, 35S:GFP-4.</p>
+            </div>
+            <div class="help-card">
+                <h3>🫘 Seed lot <code>S-0001</code></h3>
+                <p>A <b>bag or tube of seeds</b>: one line, one generation, from one source. Every physical
+                   bag has its own lot and its own label.</p>
+                <p>It says where the seeds came from (a plant here, or a stock centre), where they are kept,
+                   how much is left, and test results.</p>
+            </div>
+            <div class="help-card">
+                <h3>🌱 Plant <code>P-0001</code></h3>
+                <p>One plant <b>sown from a lot</b>, numbered #1, #2… in that sowing. This is where you record
+                   what you see (phenotypes, photos, scans), and where the next generation starts.</p>
+            </div>
+        </div>
+        <p>They connect in a cycle, which is the lineage:</p>
+        <div class="flow">
+            <span class="flow-box">🫘 seed lot</span><span class="flow-arrow">— Sow →</span>
+            <span class="flow-box">🌱 plants</span><span class="flow-arrow">— Harvest one →</span>
+            <span class="flow-box">🫘 new seed lot, next generation</span><span class="flow-arrow">— Sow → …</span>
+        </div>
+        <p>Because every seed lot remembers the plant it was harvested from, and every plant the lot it was
+           sown from, any bag can be traced back to where it started, and forward to everything grown from it.</p>
+    </section>
+
+    <section id="rules">
+        <h2>Golden rules</h2>
+        <ol class="rules">
+            <li><b>Never make seeds by hand that came from a plant here.</b> If the seeds came off a plant in
+                the seed bank, open that plant and use <b>🫘 Harvest</b>. <b>＋ Seed lot</b> is only for seeds
+                from <i>outside</i>: a stock centre, a colleague, an old box.</li>
+            <li><b>Sow through the seed bank before the plants exist on the bench.</b> Use <b>🌱 Sow</b> on the lot
+                you take seeds from, and print the plant labels. A plant that is not in the seed bank cannot be
+                harvested, crossed or traced.</li>
+            <li><b>One bag, one lot; one plant, one record.</b> Harvest each plant you keep separately. Keep its code
+                on its label.</li>
+            <li><b>Do not make a new line for each generation.</b> T2 and T3 belong to the same line as their T1
+                founder. Make a new line only for a new genetic identity: a new accession, a mutant, an
+                <b>independent</b> transformant (<b>🧬 Found a line</b>), or a cross (made for you by <b>✕ Cross</b>).</li>
+            <li><b>Use the codes</b> (L-, S-, P-) everywhere: on tubes, in the notebook (<code>@</code>), in emails.
+                Codes are never reused.</li>
+            <li><b>Mark, don't delete.</b> A plant that died: set its status to <i>dead</i> or <i>discarded</i>. A bag
+                that is empty: tick <i>used up</i>. Records others came from cannot be deleted, and should not be.</li>
+            <li><b>Use the same words for traits</b> (pick from the suggestions: <i>flowering time</i>, <i>leaf colour</i>…),
+                so phenotypes can be compared across plants and lines.</li>
+        </ol>
+    </section>
+
+    <section id="stock">
+        <h2>Seeds from outside (a stock centre, a colleague)</h2>
+        <ol class="steps">
+            <li><b>Lines → ＋ New line.</b> Name it as it is known (<i>Col-0</i>, <i>SALK_012345</i>); kind
+                <i>wild type</i> or <i>mutant</i>; species; background (e.g. <i>Col-0</i> for a SALK line).
+                Check first that the line is not already there: search the Lines list.</li>
+            <li>On the line, <b>＋ Seed lot</b>. Fill in the <b>Source</b> (<i>NASC N1092</i>, <i>from the Smith lab</i>),
+                the generation if known, the amount and <b>Kept in</b>.</li>
+            <li><b>🏷 Label</b>: print a label for the bag.</li>
+        </ol>
+    </section>
+
+    <section id="growing">
+        <h2>Sowing, and labelling plants</h2>
+        <ol class="steps">
+            <li>Open the lot you take seeds from, and <b>🌱 Sow</b>: how many plants, when, where (tray, chamber).
+                Each plant gets a code and the next number in that lot.</li>
+            <li>Tick the plants in the list and <b>🏷 Labels for selected</b>: print pot labels. A phone camera on
+                the QR code opens the plant.</li>
+            <li>If fewer plants come up than you sowed, set the others to <i>dead</i> (✎ Edit on the plant). Record
+                germination on the lot if you counted it.</li>
+            <li>Mark the plants you keep as <b>★ selected</b> (✎ Edit), and the rest <i>discarded</i> when you throw them out.</li>
+        </ol>
+    </section>
+
+    <section id="transform">
+        <h2>A transformation, from dipping to a homozygous T3</h2>
+        <div class="flow flow-wide">
+            <span class="flow-box">Col-0 plants (dipped)</span><span class="flow-arrow">→</span>
+            <span class="flow-box">T1 seed lot of 35S:GFP</span><span class="flow-arrow">→</span>
+            <span class="flow-box">T1 plants: resistant ones found lines</span><span class="flow-arrow">→</span>
+            <span class="flow-box">T2 lots: test 3:1</span><span class="flow-arrow">→</span>
+            <span class="flow-box">T2 plants</span><span class="flow-arrow">→</span>
+            <span class="flow-box">T3 lots: test homozygous</span>
+        </div>
+        <ol class="steps">
+            <li><b>The transgenic line.</b> Lines → ＋ New line: name it after the construct (<i>35S:GFP</i>),
+                kind <b>population</b>, background <i>Col-0</i>. Then <b>Change plasmids…</b>: add the plasmid from the
+                Plasmid Editor, and <b>Change parents…</b>: Col-0 as <i>background</i>.</li>
+            <li><b>The plants you dip.</b> Sow Col-0 from its lot (step <a href="#growing">Sowing</a>). These are your T0.</li>
+            <li><b>Their seeds are T1 of the transgenic line.</b> On each dipped plant (or the one you harvest), <b>🫘 Harvest</b>, and
+                set <b>Seeds belong to</b> to <i>Another line: this plant was transformed</i>, then choose
+                <i>35S:GFP</i>. The lot becomes T1 of 35S:GFP, harvested from that Col-0 plant: the lineage stays unbroken.</li>
+            <li><b>Select T1s.</b> Sow the T1 lot, on selection. Each <b>resistant</b> T1 plant is an independent
+                insertion: open it and <b>🧬 Found a line</b>. It becomes line <i>35S:GFP-4</i> (named after the plant's
+                number), carrying the plasmid. Set the sensitive ones to <i>dead</i>.</li>
+            <li><b>T2.</b> <b>🫘 Harvest</b> each founded T1 plant (its own line now): a T2 lot of, e.g., 35S:GFP-4.</li>
+            <li><b>Test the T2.</b> Sow some T2 seeds on selection, count resistant and sensitive seedlings, and on the T2
+                lot <b>🧮 Segregation test</b>, expecting <b>3:1</b>. <i>Consistent with 3:1</i> means one insertion:
+                keep that line. <i>15:1</i> means two.</li>
+            <li><b>T3.</b> Sow the chosen T2 lot, number the plants, and <b>harvest each T2 plant separately</b>: each gives
+                its own T3 lot.</li>
+            <li><b>Find the homozygous T3.</b> Test each T3 lot expecting <b>all resistant (1:0)</b>. <i>Consistent with
+                homozygous</i>: on that lot ✎ Edit, zygosity <b>homozygous</b>. That lot is your stock: label it and record
+                where it is kept.</li>
+        </ol>
+        <p class="hint">Count enough seedlings: under about 30, the test cannot tell ratios apart reliably and says so.</p>
+    </section>
+
+    <section id="cross">
+        <h2>A cross</h2>
+        <ol class="steps">
+            <li>Both parents are plants in the seed bank (sown from their lots).</li>
+            <li>Open the <b>mother</b> plant (the one that carries the seeds) and <b>✕ Cross with…</b>, then choose the
+                father (the pollen donor).</li>
+            <li>This makes a <b>new line</b> (kind <i>cross</i>, parents the two lines, carrying both lines'
+                plasmids) and its <b>F1 seed lot</b>, harvested from the mother. Name the cross if you like.</li>
+            <li>F2: sow the F1 lot and <b>🫘 Harvest</b> an F1 plant: the F2 lot of the same cross line. Genotype F2 plants
+                (record it as a phenotype, trait <i>genotype (PCR)</i>, or set their zygosity) to choose which to keep.</li>
+        </ol>
+    </section>
+
+    <section id="phenotypes">
+        <h2>Phenotypes, photos and 3D scans</h2>
+        <ul>
+            <li>Record what you see on the <b>plant</b> (or on a lot, e.g. germination, or a line): <b>＋ Observation</b>,
+                with the <b>date</b>, a <b>trait</b> from the suggestions, and a <b>value</b> with its unit (<i>day 24</i>,
+                <i>4.2 cm</i>, <i>pale</i>).</li>
+            <li>Add the photos <b>with the observation</b> they show, so each photo has a date and a trait.</li>
+            <li>3D scans (STL, PLY, OBJ, glTF) and other files (spreadsheets, PDFs) go under <b>Photos, 3D scans and files</b>
+                on the plant; drag them onto it. <b>🧊 View in 3D</b> shows a scan you can turn.</li>
+            <li>The same trait words every time make phenotypes comparable: <i>flowering time</i>, not sometimes
+                <i>bolting</i> and sometimes <i>flowered</i>.</li>
+        </ul>
+    </section>
+
+    <section id="storage">
+        <h2>Storage and stock</h2>
+        <ul>
+            <li><b>Kept in</b>: always fill it in, the same way, from big to small: <i>Freezer 2 / box 4 / A1</i>.</li>
+            <li><b>Amount</b>: with its unit (<i>300 mg</i>, <i>~2000 seeds</i>). Update it when you take a lot of seeds.</li>
+            <li><b>Used up</b>: tick it when the bag is empty; the lot stays for its lineage, greyed in the list.</li>
+            <li><b>Germination</b> and <b>zygosity</b> on the lot, once known.</li>
+            <li>Search the Seed lots list by location to see what is in a box.</li>
+        </ul>
+    </section>
+
+    <section id="notebook">
+        <h2>Plasmids and the lab notebook</h2>
+        <ul>
+            <li>A line's <b>plasmids</b> come from the Plasmid Editor's library (<b>Change plasmids…</b>). Lines founded
+                from a plant, and crosses, take their parents' plasmids automatically.</li>
+            <li>In the <b>Lab Notebook</b>, type <code>@</code> in a page (or <b>🌱 Seed…</b> in the Add bar) and choose the lot,
+                plant or line you worked with. The record then lists that notebook page under <i>In the lab notebook</i>
+                (for those allowed to open it).</li>
+        </ul>
+    </section>
+
+    <section id="special">
+        <h2>Special cases</h2>
+        <dl class="faq">
+            <dt>I harvested several plants together into one bag (a bulk).</dt>
+            <dd>Harvest one of them with <b>🫘 Harvest</b> and write the others in the lot's notes (<i>bulk of
+                P-0012 to P-0019</i>); mark the others harvested. Only do this for plants of the same line and
+                generation, and only when you will not need to tell them apart.</dd>
+            <dt>Seeds of an old line nobody entered.</dt>
+            <dd>Make the line, then <b>＋ Seed lot</b> with the source <i>old stock, box 7</i> and whatever is known in the notes.
+                Its history starts there.</dd>
+            <dt>A plant from a lot of another lab.</dt>
+            <dd>Other labs' stocks are not visible. Ask for seeds, then enter them as seeds from outside, with the source.</dd>
+            <dt>A mutant crossed into a reporter line, then selfed for several generations.</dt>
+            <dd>✕ Cross once; every generation after that is a 🫘 Harvest of the plant you keep: F1, F2, F3… of the same cross line.</dd>
+            <dt>I'm not sure which line a plant really is (it was mislabelled).</dt>
+            <dd>Say so in the plant's notes and set its zygosity to <i>unknown</i>; don't harvest it into a stock until it is checked.</dd>
+        </dl>
+    </section>
+
+    <section id="mistakes">
+        <h2>Fixing mistakes</h2>
+        <ul>
+            <li><b>✎ Edit</b> corrects any field. Every change is kept under <b>History</b> on the record, with who made it.</li>
+            <li>A wrong segregation test or observation: remove it (✕) and enter it again.</li>
+            <li>A record made by mistake, that nothing came from: <b>🗑</b> on it. Records others came from cannot be
+                deleted; mark them <i>discarded</i> or <i>used up</i> instead.</li>
+            <li>Seeds in the wrong line: on the lot, ✎ Edit and choose the right <b>Line</b>. This is possible until plants
+                are sown from the lot; after that, note it on the lot and ask your lab lead. Don't re-enter the seeds as a second lot.</li>
+        </ul>
+    </section>
+</main>
+</body>
+</html>

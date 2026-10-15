@@ -288,6 +288,17 @@ def update_lot(person: Person, ident: str, data: dict) -> None:
     with connect() as conn:
         row = visible(conn, person, 'lot', ident)
         changes = _changed(row, fields)
+        # Seeds put in the wrong line can be moved, until plants grow from them
+        # (those plants would then be of the wrong line too).
+        into = _text(data.get('line'))
+        if into:
+            target = visible(conn, person, 'line', into)
+            if target['id'] != row['line_id']:
+                if conn.execute('SELECT 1 FROM plants WHERE lot_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone():
+                    raise ValueError('Plants were sown from this lot: its line can no longer be changed')
+                old = conn.execute('SELECT code FROM lines WHERE id = ?', (row['line_id'],)).fetchone()
+                fields['line_id'] = target['id']
+                changes.append(f"line: {old['code'] if old else '?'} → {target['code']}")
         if fields:
             conn.execute(f'UPDATE lots SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
                          'WHERE id = ?', (*fields.values(), row['id']))
@@ -352,13 +363,25 @@ def update_plant(person: Person, ident: str, data: dict) -> None:
 
 
 def harvest(person: Person, plant_ident: str, data: dict) -> str:
-    """A new seed lot from one plant: its line, the next generation."""
+    """
+    A new seed lot from one plant: of its line, the next generation. Seeds from
+    a plant that was transformed (dipped) belong to the transgenic line instead:
+    `line` names it, and the lot is its T1 unless a generation is given.
+    """
     with connect() as conn:
         plant = visible(conn, person, 'plant', plant_ident)
         lot = conn.execute('SELECT generation FROM lots WHERE id = ?', (plant['lot_id'],)).fetchone()
+        line_id = plant['line_id']
+        into = _text(data.get('line'))
+        if into:
+            target = visible(conn, person, 'line', into)
+            line_id = target['id']
     data = dict(data)
-    data.setdefault('generation', next_generation(lot['generation'] if lot else ''))
-    lot_id = create_lot(person, data, from_plant=plant['id'], line_id=plant['line_id'])
+    if line_id != plant['line_id']:
+        data['generation'] = data.get('generation') or 'T1'
+    else:
+        data['generation'] = data.get('generation') or next_generation(lot['generation'] if lot else '')
+    lot_id = create_lot(person, data, from_plant=plant['id'], line_id=line_id)
     with connect() as conn:
         conn.execute("UPDATE plants SET status = 'harvested', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                      (plant['id'],))

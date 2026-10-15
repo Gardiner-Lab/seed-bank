@@ -64,6 +64,10 @@ def create_app() -> Flask:
     def labels_page():
         return page('labels.html')
 
+    @app.route('/help')
+    def help_page():
+        return page('help.html')
+
     @app.route('/about')
     def about_page():
         return render_template('about.html', version=APP_VERSION, links=links())
