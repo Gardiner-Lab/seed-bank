@@ -203,7 +203,9 @@ def test_plasmids_and_notebook_mentions(as_user, world):
     ana, ben, zoe = as_user('ana'), as_user('ben'), as_user('zoe')
     found = _ok(ben.get('/api/plasmids?q=pGreen'))['plasmids']
     assert [p['id'] for p in found] == ['p1']
-    assert [p['id'] for p in _ok(ben.get('/api/plasmids'))['plasmids']] == ['p1'], "ana's private plasmid stays hers"
+    # A plasmid is always its owner's lab's; other labs see it only once public.
+    assert {p['id'] for p in _ok(ben.get('/api/plasmids'))['plasmids']} == {'p1', 'p2'}
+    assert _ok(zoe.get('/api/plasmids'))['plasmids'] == []
     line = _line(ana)
     lot = _lot(ana, line['code'])
     conn = sqlite3.connect(world['paths']['notebook'])
