@@ -5,6 +5,12 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- People can be in several labs: they see the records of all of them, and choose which lab a new line
+  goes to (a picker at the top, for someone in more than one; their first lab until they choose). A
+  seed lot belongs to its line's lab. A lab's code is chosen by that lab's lead.
+- Plasmids follow the Plasmid Editor: shared within the owner's labs.
+
 ## [0.2.0] - 2026-10-15
 
 ### Changed
