@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-19
+
 ### Changed
 - People can be in several labs: they see the records of all of them, and choose which lab a new line
   goes to (a picker at the top, for someone in more than one; their first lab until they choose). A
