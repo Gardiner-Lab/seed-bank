@@ -327,3 +327,34 @@ def test_codes_made_before_lab_codes_still_work(as_user, world):
     conn.close()
     assert _ok(ana.get('/api/line/L-0007'))['record']['name'] == 'Col-0'
     assert _lot(ana, 'L-0007')['line']['code'] == 'L-0007'
+
+
+def test_someone_in_two_labs_sees_both_and_chooses_where_new_records_go(as_user, world):
+    import sqlite3
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.executescript("""
+        CREATE TABLE lab_members (username TEXT, lab_id INTEGER, role TEXT, lab_admin INTEGER DEFAULT 0,
+                                  joined_at TEXT, PRIMARY KEY (username, lab_id));
+        INSERT INTO lab_members (username, lab_id, role, joined_at)
+            SELECT username, lab_id, role, '1' FROM members;
+        INSERT INTO lab_members (username, lab_id, role, joined_at) VALUES ('zoe', 1, 'lab_lead', '9');
+    """)
+    conn.commit()
+    ana, zoe = as_user('ana'), as_user('zoe')
+    gardiner = _line(ana, 'Col-0 35S::GFP')
+    me = zoe.get('/api/me').get_json()
+    assert me['labs'] == ['Other Lab', 'Gardiner Lab'] and me['lab'] == 'Other Lab'
+    # Zoe sees Gardiner Lab's records as well as her own lab's.
+    assert zoe.get(f"/api/line/{gardiner['code']}").status_code == 200
+    # A new line goes to the lab chosen, of hers; her first lab without a choice; never another's.
+    chosen = _line(zoe, 'Ler pER8', lab='Gardiner Lab')
+    assert chosen['lab'] == 'Gardiner Lab'
+    assert _line(zoe, 'Ler wild type')['lab'] == 'Other Lab'
+    assert zoe.post('/api/lines', json={'name': 'x', 'species': 'Arabidopsis thaliana', 'lab': 'Smith Lab'}).status_code == 400
+    # A lot of a Gardiner Lab line is Gardiner Lab's.
+    lot = zoe.post('/api/lots', json={'line': chosen['code'], 'generation': 'T1'}).get_json()['record']
+    assert lot['lab'] == 'Gardiner Lab'
+    # She leads Gardiner Lab, not Other Lab: its code is hers to see, not to choose.
+    assert zoe.get('/api/lab?lab=Gardiner Lab').get_json()['lab'] == 'Gardiner Lab'
+    assert zoe.get('/api/lab').get_json()['can_change'] is False or zoe.get('/api/lab').get_json()['fixed']
+    assert zoe.put('/api/lab', json={'code': 'OTH', 'lab': 'Other Lab'}).status_code == 403

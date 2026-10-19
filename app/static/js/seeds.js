@@ -193,7 +193,8 @@ const App = {
   async init() {
     try {
       this.meta = await api('GET', '/me');
-      this.lab = await api('GET', '/lab');
+      this.labPicker(this.meta.labs);
+      await this.loadLab();
     } catch (err) {
       put(document.getElementById('main'), el('p', { class: 'empty' }, err.message));
       return;
@@ -252,6 +253,31 @@ const App = {
   },
 
   /** Which code this lab's records start with, and a way to choose it before the first one. */
+  /**
+   * Someone in several labs chooses which one new records go to (their first,
+   * until they choose; remembered on this computer). They see all their labs' records.
+   */
+  chosenLab: null,
+  labPicker(labs) {
+    if (!labs || labs.length < 2) return;
+    let kept = null;
+    try { kept = localStorage.getItem('labChoice'); } catch (e) { /* private window */ }
+    this.chosenLab = labs.includes(kept) ? kept : labs[0];
+    const picker = el('select', { class: 'lab-picker', title: 'New records go to this lab; you see the records of all your labs',
+      'aria-label': 'Lab for new records', onchange: async (e) => {
+        this.chosenLab = e.target.value;
+        try { localStorage.setItem('labChoice', this.chosenLab); } catch (e) { /* private window */ }
+        await this.loadLab();
+        this.route();
+      } }, labs.map((l) => el('option', { value: l, selected: l === this.chosenLab }, l)));
+    document.querySelector('.topbar-user')?.before(el('label', { class: 'lab-pick' }, 'New in ', picker));
+  },
+
+  /** The chosen lab's code, for the line above the lists. */
+  async loadLab() {
+    this.lab = await api('GET', this.chosenLab ? `/lab?lab=${encodeURIComponent(this.chosenLab)}` : '/lab');
+  },
+
   labCodeLine() {
     const lab = this.lab;
     if (!lab) return null;
@@ -262,7 +288,7 @@ const App = {
         title: 'Choose the lab code',
         intro: 'Every code your lab makes starts with it, so no two labs\' codes are ever the same. It can be chosen until the lab\'s first record; after that it is fixed, as codes on labels never change.',
         fields: [{ name: 'code', label: 'Lab code', value: lab.code, placeholder: 'e.g. GL, GARD', hint: '1 to 6 letters and digits, starting with a letter.' }],
-        submit: async (v) => { this.lab = await api('PUT', '/lab', v); this.route(); },
+        submit: async (v) => { this.lab = await api('PUT', '/lab', { ...v, lab: lab.lab }); this.route(); },
       }) }, 'Change…') : null);
   },
 
@@ -393,7 +419,7 @@ const App = {
         { name: 'description', label: 'Description', type: 'textarea', value: rec?.description },
       ],
       submit: async (v) => {
-        const res = rec ? await api('PUT', `/lines/${rec.code}`, v) : await api('POST', '/lines', v);
+        const res = rec ? await api('PUT', `/lines/${rec.code}`, v) : await api('POST', '/lines', { ...v, lab: this.chosenLab });
         if (rec) this.reload(); else location.hash = `line=${res.record.code}`;
         toast(rec ? 'Saved' : `Made ${res.record.code}`, 'success');
       },

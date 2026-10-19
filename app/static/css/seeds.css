@@ -179,3 +179,7 @@ ul.plain { list-style: none; padding: 0; margin: .3rem 0; }
     .label-sheet { padding: 0; }
     .label { border-color: #d1d5db; }
 }
+
+/* the lab new records go to, for someone in several labs */
+.lab-pick { font-size: .85rem; color: var(--muted, #6b7280); margin-left: auto; }
+.lab-picker { font: inherit; margin-left: .3rem; padding: .1rem .3rem; border-radius: .3rem; }

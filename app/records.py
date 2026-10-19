@@ -40,13 +40,34 @@ class NotFound(Exception):
     pass
 
 
-def lab_of(person: Person) -> str:
-    """Whose stocks a person's records join: their lab's, or their own without one."""
-    return person.lab or f'user:{person.username}'
+def labs_of(person: Person) -> List[str]:
+    """Every lab whose records this person sees: theirs, or their own without a lab."""
+    names = [m['lab'] for m in person.labs if m.get('lab')] or ([person.lab] if person.lab else [])
+    return names or [f'user:{person.username}']
+
+
+def lab_of(person: Person, chosen: Optional[str] = None, strict: bool = False) -> str:
+    """
+    The lab a new record joins: the one chosen, of theirs, else their first;
+    their own without a lab. strict: a lab chosen that is not theirs is refused.
+    """
+    names = labs_of(person)
+    if chosen:
+        found = next((n for n in names if n.casefold() == str(chosen).strip().casefold()), None)
+        if found:
+            return found
+        if strict:
+            raise ValueError('Choose one of your labs')
+    return names[0]
+
+
+def leads(person: Person, lab: str) -> bool:
+    """Chooses this lab's code: its lead, an admin, or anyone for their own records without a lab."""
+    return person.is_admin or person.leads(lab) or lab.startswith('user:')
 
 
 def can_see(person: Person, row) -> bool:
-    return person.is_admin or (row['lab'] or '').casefold() == lab_of(person).casefold()
+    return person.is_admin or (row['lab'] or '').casefold() in {n.casefold() for n in labs_of(person)}
 
 
 def _new_id() -> str:
@@ -95,22 +116,22 @@ def _lab_has_records(conn, lab: str) -> bool:
                for t in ('lines', 'lots', 'plants'))
 
 
-def lab_info(person: Person) -> dict:
-    lab = lab_of(person)
+def lab_info(person: Person, chosen: Optional[str] = None) -> dict:
+    lab = lab_of(person, chosen)
     with connect() as conn:
         code = lab_code(conn, lab)
         fixed = _lab_has_records(conn, lab)
-    return {'lab': lab, 'code': code, 'fixed': fixed,
-            'can_change': not fixed and (person.is_admin or person.is_lab_lead or lab.startswith('user:'))}
+    return {'lab': lab, 'code': code, 'fixed': fixed, 'labs': labs_of(person),
+            'can_change': not fixed and leads(person, lab)}
 
 
-def set_lab_code(person: Person, code: str) -> dict:
+def set_lab_code(person: Person, code: str, chosen: Optional[str] = None) -> dict:
     """Choose the lab's code, before it has any records: a lab lead, an admin, or someone without a lab."""
-    lab = lab_of(person)
+    lab = lab_of(person, chosen, strict=True)
     code = (code or '').strip().upper()
     if not LAB_CODE.fullmatch(code):
         raise ValueError('A lab code is 1 to 6 letters and digits, starting with a letter, e.g. GL or GARD')
-    if not (person.is_admin or person.is_lab_lead or lab.startswith('user:')):
+    if not leads(person, lab):
         raise Forbidden("Only the lab's lead or an administrator chooses the lab's code")
     with connect() as conn:
         if _lab_has_records(conn, lab):
@@ -121,7 +142,7 @@ def set_lab_code(person: Person, code: str) -> dict:
         conn.execute('INSERT INTO lab_codes (lab, code, set_by) VALUES (?, ?, ?) '
                      'ON CONFLICT(lab) DO UPDATE SET code = excluded.code, set_by = excluded.set_by, '
                      'set_at = CURRENT_TIMESTAMP', (lab, code, person.username))
-    return lab_info(person)
+    return lab_info(person, lab)
 
 
 def _log(conn, kind: str, record_id: str, by: str, what: str) -> None:
@@ -219,10 +240,11 @@ def create_line(person: Person, data: dict) -> str:
     fields = _line_fields(data)
     with connect() as conn:
         line_id = _new_id()
-        code = _code(conn, 'line', lab_of(person))
+        lab = lab_of(person, data.get('lab'), strict=True)
+        code = _code(conn, 'line', lab)
         conn.execute('INSERT INTO lines (id, code, lab, name, species, background, kind, description, created_by) '
                      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                     (line_id, code, lab_of(person), fields['name'], fields['species'], fields['background'],
+                     (line_id, code, lab, fields['name'], fields['species'], fields['background'],
                       fields['kind'], fields['description'], person.username))
         for parent in data.get('parents') or []:
             _add_parent(conn, person, line_id, parent.get('id'), parent.get('role') or 'parent')
@@ -334,12 +356,14 @@ def create_lot(person: Person, data: dict, *, from_plant: Optional[str] = None,
     with connect() as conn:
         if line_id is None:
             line_id = visible(conn, person, 'line', _text(data.get('line')))['id']
+        # A lot belongs to its line's lab, whoever harvests it.
+        lab = conn.execute('SELECT lab FROM lines WHERE id = ?', (line_id,)).fetchone()['lab']
         lot_id = _new_id()
-        code = _code(conn, 'lot', lab_of(person))
+        code = _code(conn, 'lot', lab)
         conn.execute('INSERT INTO lots (id, code, lab, line_id, generation, from_plant_id, father_plant_id, source, '
                      'harvested_on, amount, location, germination, zygosity, notes, created_by) '
                      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                     (lot_id, code, lab_of(person), line_id, fields['generation'], from_plant, father_plant,
+                     (lot_id, code, lab, line_id, fields['generation'], from_plant, father_plant,
                       fields['source'], fields['harvested_on'], fields['amount'], fields['location'],
                       fields['germination'], fields['zygosity'], fields['notes'], person.username))
         _log(conn, 'lot', lot_id, person.username, f'created {code}')
