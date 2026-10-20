@@ -20,6 +20,42 @@ def _lot(client, line, **extra):
     return _ok(client.post('/api/lots', json={'line': line, **extra}), 201)['record']
 
 
+def test_a_lines_biosafety_stock_center_and_genetics(as_user, world):
+    ana = as_user('ana')
+    assert ana.post('/api/lines', json={'name': 'x', 'biosafety': 'V'}).status_code == 400
+    assert ana.post('/api/lines', json={'name': 'x', 'gmo_type': 'magic'}).status_code == 400
+    assert ana.post('/api/lines', json={'name': 'x', 'stock_center_url': 'javascript:alert(1)'}).status_code == 400
+    assert 'SALK' in _ok(ana.get('/api/me'))['line_options']['collections']
+    line = _line(ana, 'myb21-1', kind='mutant', permit='IG 99-249', biosafety='I', gmo_type='T-DNA insertion',
+                 gene_expression='knock-out', selection_marker='Kanamycin', collection='SALK',
+                 stock_center_number='SALK_012345C', accession='N512345',
+                 stock_center_url='https://abrc.osu.edu/stocks/512345', mutation_info='T-DNA in exon 2')
+    got = _ok(ana.get(f"/api/line/{line['code']}"))['record']
+    assert got['gmo_type'] == 'T-DNA insertion' and got['collection'] == 'SALK' and got['mutation_info'] == 'T-DNA in exon 2'
+    _ok(ana.put(f"/api/lines/{line['code']}", json={'biosafety': 'II', 'construction': 'Agrobacterium floral dip'}))
+    got = _ok(ana.get(f"/api/line/{line['code']}"))['record']
+    assert got['biosafety'] == 'II' and got['construction'] == 'Agrobacterium floral dip' and got['permit'] == 'IG 99-249'
+
+
+def test_an_older_database_gets_the_new_line_columns(world):
+    import sqlite3
+    from app import db
+    conn = sqlite3.connect(db.path())
+    conn.executescript("""
+        ALTER TABLE lines RENAME TO lines_new;
+        CREATE TABLE lines (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, lab TEXT, name TEXT NOT NULL,
+            species TEXT NOT NULL DEFAULT '', background TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'other',
+            description TEXT NOT NULL DEFAULT '', created_by TEXT, created_at TIMESTAMP, updated_at TIMESTAMP, deleted_at TIMESTAMP);
+        INSERT INTO lines (id, code, name) VALUES ('old', 'GARD-L-0001', 'Col-0');
+    """)
+    conn.commit()
+    conn.close()
+    db.initialize()
+    conn = sqlite3.connect(db.path())
+    assert conn.execute("SELECT name, permit, gmo_type FROM lines WHERE id = 'old'").fetchone() == ('Col-0', '', '')
+    conn.close()
+
+
 def test_nothing_without_the_suite_saying_who_you_are(world):
     client = world['app'].test_client()
     assert client.get('/api/lines').status_code == 401

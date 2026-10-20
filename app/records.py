@@ -26,6 +26,16 @@ LINE_KINDS = ('wild type', 'mutant', 'transgenic', 'population', 'cross', 'other
 ZYGOSITY = ('', 'homozygous', 'heterozygous', 'hemizygous', 'segregating', 'wild type', 'unknown')
 PLANT_STATUS = ('growing', 'harvested', 'discarded', 'dead')
 PARENT_ROLES = ('mother', 'father', 'background', 'founded from', 'parent')
+# A line's biosafety, stock center and genetics, as the GMO register (and eLab's
+# Plant Seed) has them. An empty permit or biosafety level: the lab's own.
+BIOSAFETY = ('', 'I', 'II', 'III', 'IV', 'Unknown')
+GMO_TYPES = ('', 'T-DNA insertion', 'Plasmid introduction', 'Chromosomal mutation', 'Unknown')
+GENE_EXPRESSION = ('', 'knock-out', 'knock-down', 'knock-in', 'overexpressor line', 'marker line', 'unknown', '~ other ~')
+PERMITS = ('IG 99-249', 'New GMO (not yet in permit)')
+COLLECTIONS = ('SALK', 'GABI', 'SAIL', 'WiscDsLox', 'FLAG (INRA)', 'SM', 'CSHL', 'AGRIKOLA', 'TRANSPLANTA',
+               'IMA (Ds insertion)', 'Feldmann T-DNA Tagged lines', 'wildtype', 'non-GMO mutant')
+LINE_TEXT = (('permit', 120), ('accession', 120), ('collection', 120), ('stock_center_number', 120),
+             ('stock_center_url', 500), ('selection_marker', 200), ('mutation_info', 5000), ('construction', 5000))
 PREFIX = {'line': 'L', 'lot': 'S', 'plant': 'P'}
 TABLE = {'line': 'lines', 'lot': 'lots', 'plant': 'plants'}
 KIND_OF_PREFIX = {v: k for k, v in PREFIX.items()}
@@ -233,6 +243,18 @@ def _line_fields(data: dict, partial: bool = False) -> Dict[str, Any]:
         if kind not in LINE_KINDS:
             raise ValueError(f'kind must be one of {", ".join(LINE_KINDS)}')
         out['kind'] = kind
+    for key, limit in LINE_TEXT:
+        if key in data or not partial:
+            out[key] = _text(data.get(key), limit)
+    if out.get('stock_center_url') and not re.match(r'https?://', out['stock_center_url']):
+        raise ValueError('The stock center link is a web address, starting with https://')
+    for key, allowed, what in (('biosafety', BIOSAFETY, 'biosafety level'), ('gmo_type', GMO_TYPES, 'GMO type'),
+                               ('gene_expression', GENE_EXPRESSION, 'gene expression')):
+        if key in data or not partial:
+            v = _text(data.get(key))
+            if v not in allowed:
+                raise ValueError(f'{what} must be one of {", ".join(a for a in allowed if a)}, or empty')
+            out[key] = v
     return out
 
 
@@ -242,10 +264,9 @@ def create_line(person: Person, data: dict) -> str:
         line_id = _new_id()
         lab = lab_of(person, data.get('lab'), strict=True)
         code = _code(conn, 'line', lab)
-        conn.execute('INSERT INTO lines (id, code, lab, name, species, background, kind, description, created_by) '
-                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                     (line_id, code, lab, fields['name'], fields['species'], fields['background'],
-                      fields['kind'], fields['description'], person.username))
+        cols = ['id', 'code', 'lab', 'created_by', *fields]
+        conn.execute(f'INSERT INTO lines ({", ".join(cols)}) VALUES ({", ".join("?" * len(cols))})',
+                     (line_id, code, lab, person.username, *fields.values()))
         for parent in data.get('parents') or []:
             _add_parent(conn, person, line_id, parent.get('id'), parent.get('role') or 'parent')
         for plasmid in data.get('plasmids') or []:

@@ -5,6 +5,12 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A line's biosafety, stock center and genetics, as the GMO register (and eLabJournal's Plant Seed
+  type) asks: permit and biosafety level (empty: the lab's own), GMO type, gene expression, selection
+  marker, mutation information, construction method, stock center collection and number, accession
+  and a link to the stock center. Lab Stocks sends them to eLab with the line's seed lots.
+
 ## [0.3.0] - 2026-10-19
 
 ### Changed

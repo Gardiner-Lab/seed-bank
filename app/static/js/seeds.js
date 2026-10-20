@@ -200,6 +200,10 @@ const App = {
       return;
     }
     document.body.append(el('datalist', { id: 'traits' }, TRAITS.map((t) => el('option', { value: t }))));
+    const lo = this.meta.line_options;
+    for (const [id, list] of [['permits', lo.permits], ['collections', lo.collections]]) {
+      document.body.append(el('datalist', { id }, list.map((v) => el('option', { value: v }))));
+    }
     window.addEventListener('hashchange', () => this.route());
     this.route();
   },
@@ -390,6 +394,14 @@ const App = {
       this.facts([['Kind', rec.line_kind], ['Species', rec.species && el('i', {}, rec.species)], ['Background', rec.background],
         ['Made by', `${rec.created_by || '—'} · ${localTime(rec.created_at)}`]]),
       rec.description ? el('p', { class: 'description' }, rec.description) : null,
+      this.section('Biosafety and stock center', this.facts([
+        ['Permit', rec.permit || el('span', { class: 'hint' }, 'the lab\'s')],
+        ['Biosafety level', rec.biosafety || el('span', { class: 'hint' }, 'the lab\'s')],
+        ['GMO type', rec.gmo_type], ['Gene expression', rec.gene_expression], ['Selection marker', rec.selection_marker],
+        ['Mutation information', rec.mutation_info], ['Construction method', rec.construction],
+        ['Stock center', [rec.collection, rec.stock_center_number].filter(Boolean).join(' ')],
+        ['Accession', rec.accession],
+        ['Stock center link', rec.stock_center_url ? el('a', { href: rec.stock_center_url, target: '_blank', rel: 'noopener' }, rec.stock_center_url) : null]])),
       this.section('Plasmids',
         rec.plasmids.length ? el('div', { class: 'chips' }, rec.plasmids.map((p) => el('a', {
           class: 'chip chip-plasmid', href: `${SB.editor}/editor?open=${encodeURIComponent(p.id)}`, target: '_blank', rel: 'noopener',
@@ -417,7 +429,22 @@ const App = {
         { name: 'species', label: 'Species', value: rec?.species ?? 'Arabidopsis thaliana', list: null },
         { name: 'background', label: 'Background', value: rec?.background, placeholder: 'e.g. Col-0' },
         { name: 'description', label: 'Description', type: 'textarea', value: rec?.description },
+        // Biosafety, stock center and genetics: for the GMO register (and eLab's Plant Seed).
+        { name: 'permit', label: 'Permit', value: rec?.permit, list: 'permits', placeholder: 'empty: the lab\'s' },
+        { name: 'biosafety', label: 'Biosafety level', type: 'select', value: rec?.biosafety,
+          options: m.line_options.biosafety.map((v) => [v, v || '— the lab\'s —']) },
+        { name: 'gmo_type', label: 'GMO type', type: 'select', value: rec?.gmo_type, options: m.line_options.gmo_types },
+        { name: 'gene_expression', label: 'Gene expression', type: 'select', value: rec?.gene_expression,
+          options: m.line_options.gene_expression },
+        { name: 'selection_marker', label: 'Selection marker', value: rec?.selection_marker, placeholder: 'e.g. BASTA, Kanamycin' },
+        { name: 'mutation_info', label: 'Mutation information', type: 'textarea', value: rec?.mutation_info },
+        { name: 'construction', label: 'Construction method', type: 'textarea', value: rec?.construction },
+        { name: 'collection', label: 'Stock center collection', value: rec?.collection, list: 'collections', placeholder: 'e.g. SALK, GABI' },
+        { name: 'stock_center_number', label: 'Stock center number', value: rec?.stock_center_number, placeholder: 'e.g. SALK_012345C' },
+        { name: 'accession', label: 'Accession', value: rec?.accession, placeholder: 'e.g. N12345, CGN13357' },
+        { name: 'stock_center_url', label: 'Stock center link', value: rec?.stock_center_url, placeholder: 'https://…' },
       ],
+      wide: true,
       submit: async (v) => {
         const res = rec ? await api('PUT', `/lines/${rec.code}`, v) : await api('POST', '/lines', { ...v, lab: this.chosenLab });
         if (rec) this.reload(); else location.hash = `line=${res.record.code}`;

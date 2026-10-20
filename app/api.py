@@ -43,6 +43,9 @@ def _kind(kind: str) -> str:
 def me(person):
     return jsonify({'person': person.to_dict(), 'lab': records.lab_of(person), 'labs': records.labs_of(person),
                     'kinds': records.LINE_KINDS, 'zygosity': records.ZYGOSITY,
+                    'line_options': {'biosafety': records.BIOSAFETY, 'gmo_types': records.GMO_TYPES,
+                                     'gene_expression': records.GENE_EXPRESSION, 'permits': records.PERMITS,
+                                     'collections': records.COLLECTIONS},
                     'plant_status': records.PLANT_STATUS, 'parent_roles': records.PARENT_ROLES,
                     'ratios': list(stats.RATIOS)})
 

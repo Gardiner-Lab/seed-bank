@@ -206,6 +206,12 @@ def connect() -> _Connection:
     return _Connection()
 
 
+# A line's biosafety, stock center and genetics, as the GMO register (and
+# eLabJournal's Plant Seed type) asks: added to databases from before them.
+LINE_ADDED = ['permit', 'biosafety', 'gmo_type', 'accession', 'collection', 'stock_center_number', 'stock_center_url',
+              'selection_marker', 'gene_expression', 'mutation_info', 'construction']
+
+
 def initialize(db_path: Optional[str] = None) -> None:
     if db_path:
         set_path(db_path)
@@ -217,3 +223,7 @@ def initialize(db_path: Optional[str] = None) -> None:
         # database from a read-only mount, where SQLite cannot open WAL.
         conn.execute('PRAGMA journal_mode = DELETE')
         conn.executescript(SCHEMA)
+        have = {r[1] for r in conn.execute('PRAGMA table_info(lines)')}
+        for column in LINE_ADDED:
+            if column not in have:
+                conn.execute(f"ALTER TABLE lines ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
