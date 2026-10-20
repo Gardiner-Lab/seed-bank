@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-20
+
 ### Added
 - A line's biosafety, stock center and genetics, as the GMO register (and eLabJournal's Plant Seed
   type) asks: permit and biosafety level (empty: the lab's own), GMO type, gene expression, selection
