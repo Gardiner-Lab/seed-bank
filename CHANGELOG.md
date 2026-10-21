@@ -5,6 +5,14 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-21
+
+### Added
+- Seed lots in eLabJournal, as Lab Stocks copies them there: above the lists, how many of the lab's
+  are sent, waiting, archived in eLab or failed (each failed lot with the reason), with Send now; on
+  a lot's page, its sample in eLab and how it stands, with sending it now or again. Both stay hidden
+  when the lab does not copy its seed lots. Needs Lab Stocks 0.4.3 (STOCKS_URL, default /stocks).
+
 ## [0.4.0] - 2026-10-20
 
 ### Added
