@@ -68,6 +68,9 @@ table.data tr.misfit td.verdict { color: var(--danger); }
     border: 1px solid var(--border); border-radius: .5rem; padding: .8rem 1rem; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
+.elab-fact { margin: .6rem 0; font-size: .9rem; color: var(--muted); }
+.elab-fact:empty, .elab-line:empty { display: none; }
+.elab-failed { color: var(--danger); }
 .description { background: var(--card); border: 1px solid var(--border); border-radius: .5rem; padding: .7rem 1rem; white-space: pre-wrap; }
 .section { margin-top: 1.4rem; }
 .section h2 { font-size: 1.05rem; margin: 0 0 .5rem; }

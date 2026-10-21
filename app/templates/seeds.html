@@ -37,6 +37,7 @@
         base: {{ request.script_root | tojson }},
         editor: {{ links.editor | tojson }},
         notebook: {{ links.notebook | tojson }},
+        stocks: {{ links.stocks | tojson }},
         person: {{ person.to_dict() | tojson }},
     };
 </script>

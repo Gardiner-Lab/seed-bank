@@ -245,6 +245,7 @@ const App = {
           view === 'lots' ? el('button', { class: 'btn btn-primary', onclick: () => this.newLot() }, '＋ Seed lot') : null,
           labelBtn)),
       this.labCodeLine(),
+      this.elabLine(),
       el('p', { class: 'hint' }, {
         lines: 'Wild types, mutants, transgenic events and crosses, with the plasmids they carry. Open one for its seed lots and pedigree.',
         lots: 'Seeds as they are kept. Sow plants from a lot; plants are harvested into the next generation.',
@@ -294,6 +295,49 @@ const App = {
         fields: [{ name: 'code', label: 'Lab code', value: lab.code, placeholder: 'e.g. GL, GARD', hint: '1 to 6 letters and digits, starting with a letter.' }],
         submit: async (v) => { this.lab = await api('PUT', '/lab', { ...v, lab: lab.lab }); this.route(); },
       }) }, 'Change…') : null);
+  },
+
+  /**
+   * How far the lab's seed lots are copied to eLabJournal (Lab Stocks copies them there), and sending
+   * them now. Empty when the lab does not copy its seed lots, or Lab Stocks is away.
+   */
+  elabLine() {
+    const line = el('p', { class: 'lab-code-line elab-line' });
+    const lab = this.lab?.lab;
+    if (!lab) return null;
+    const stocks = async (method, path, body) => {
+      const res = await fetch(`${SB.stocks}/api/elab/seed-lots${path}`, { method, credentials: 'same-origin',
+        headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Lab Stocks: ${res.status}`);
+      return data;
+    };
+    const draw = async () => {
+      let s;
+      try { s = await stocks('GET', `?lab=${encodeURIComponent(lab)}`); } catch (err) { return; }
+      if (!s.copies) { put(line); return; }
+      const failed = s.failed.length;
+      put(line,
+        'Seed lots copied to ', el('a', { href: s.url, target: '_blank', rel: 'noopener' }, 'eLabJournal'), ': ',
+        `${s.synced} sent`, s.waiting ? `, ${s.waiting} waiting` : '',
+        s.held ? el('span', { title: 'Archived in eLab (by someone there): no longer sent, and not made again' }, `, ${s.held} archived in eLab`) : '',
+        failed ? el('a', { href: '#', class: 'elab-failed', onclick: (e) => {
+          e.preventDefault();
+          modal({ title: 'Not copied to eLabJournal', build: (body, close) => body.append(el('ul', { onclick: (ev) => { if (ev.target.closest('a')) close(); } },
+            ...s.failed.map((f) => el('li', {}, link({ kind: 'lot', code: f.code }), ` ${f.error}`)))) });
+        } }, `, ${failed} failed`) : '',
+        s.last_error ? el('span', { class: 'elab-failed' }, ` — ${s.last_error}`) : '',
+        el('button', { class: 'btn btn-secondary btn-sm', style: 'margin-left:.6rem',
+          title: 'Send what changed to eLab now, not at the next round (every few minutes)', onclick: async (ev) => {
+            ev.target.disabled = true;
+            try { await stocks('POST', '/sync', { lab }); } catch (err) { toast(err.message, 'error', 6000); ev.target.disabled = false; return; }
+            toast('Sending to eLabJournal', 'success');
+            setTimeout(draw, 8000);
+          } }, '⟳ Send now'),
+        el('a', { href: SB.stocks, class: 'hint', style: 'margin-left:.6rem', title: 'eLab settings and bringing over from eLab are in Lab Stocks' }, 'eLab settings in Lab Stocks →'));
+    };
+    draw();
+    return line;
   },
 
   pick(code) {
@@ -572,6 +616,7 @@ const App = {
         ['Father', rec.father_plant ? link(rec.father_plant) : null], ['Source', rec.source], ['Harvested on', rec.harvested_on],
         ['Amount', rec.amount], ['Kept in', rec.location], ['Germination', rec.germination !== null ? `${rec.germination}%` : null],
         ['Zygosity', rec.zygosity], ['Made by', `${rec.created_by || '—'} · ${localTime(rec.created_at)}`]]),
+      this.elabFact(rec),
       rec.notes ? el('p', { class: 'description' }, rec.notes) : null,
       this.section(`Segregation tests (${rec.seg_tests.length})`,
         rec.seg_tests.length ? el('table', { class: 'data' },
@@ -592,6 +637,47 @@ const App = {
             el('td', {}, p.line), el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, p.location),
             el('td', {}, p.harvested.map((h, i) => [i ? ', ' : '', link(h)])))))) : el('p', { class: 'hint' }, 'None sown yet.')),
       rec.descendants?.length ? this.section('Descendants', this.descendants(rec.descendants)) : null);
+  },
+
+  /**
+   * Where the lot is in eLabJournal (Lab Stocks copies the lab's seed lots there): a link to its sample,
+   * how it stands, and sending it now. Empty when the lab does not copy its seed lots, or Lab Stocks is away.
+   */
+  elabFact(rec) {
+    const line = el('p', { class: 'elab-fact' });
+    const stocks = async (method, path) => {
+      const res = await fetch(`${SB.stocks}/api/elab/seed-lots/${encodeURIComponent(rec.code)}${path}`, { method, credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Lab Stocks: ${res.status}`);
+      return data;
+    };
+    const draw = async () => {
+      let e;
+      try { e = (await stocks('GET', '')).elab; } catch (err) { return; }
+      if (!e) { put(line); return; }
+      const said = {
+        sent: ['✓ sent', ''], waiting: ['waiting to be sent', ''], 'not sent': ['not in eLab yet', ''],
+        failed: ['not sent', ` (${e.error || 'eLab refused it'})`], archived: ['archived there', ' (used up or deleted here)'],
+        'archived in eLab': ['archived in eLab', ' (by someone there): no longer sent. Restore it there (open it, then Restore), or send it again'],
+      }[e.state] || [e.state, ''];
+      const again = e.state === 'archived in eLab';
+      const send = e.state === 'archived' ? null : el('button', { class: 'btn btn-secondary btn-sm', style: 'margin-left:.5rem',
+        title: again ? 'If it was restored in eLab, it goes on following changes here; if not, a new sample is made'
+          : 'Send it to eLab now, not at the next round (every few minutes)',
+        onclick: async (ev) => {
+          ev.target.disabled = true;
+          let res;
+          try { res = await stocks('POST', '/send'); } catch (err) { toast(err.message, 'error', 6000); ev.target.disabled = false; return; }
+          toast(again ? (res.restored ? 'Restored in eLab: changes go to it again' : 'A new sample is being made in eLab')
+            : 'Sending to eLabJournal', 'success', 5000);
+          setTimeout(draw, 8000);
+        } }, again ? 'Send to eLab again' : '⟳ Send to eLab now');
+      const link = e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', title: 'Open its sample in eLab' }, `sample ${e.sample_id} ↗`) : null;
+      line.classList.toggle('elab-failed', e.state === 'failed');
+      put(line, '🔗 In eLabJournal: ', link, link ? ' · ' : '', el('b', {}, said[0]), said[1], send);
+    };
+    draw();
+    return line;
   },
 
   sow(rec) {

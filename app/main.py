@@ -43,6 +43,8 @@ def create_app() -> Flask:
             'suite_home': os.environ.get('SUITE_HOME_URL', '/'),
             'editor': os.environ.get('EDITOR_URL', '/editor').rstrip('/'),
             'notebook': os.environ.get('NOTEBOOK_URL', '/notebook').rstrip('/'),
+            # Lab Stocks copies the seed lots to eLabJournal; a lot's page asks it how far.
+            'stocks': os.environ.get('STOCKS_URL', '/stocks').rstrip('/'),
             'logout': os.environ.get('SUITE_LOGOUT_URL', '/account/logout'),
             # Where phones reach the suite, for the codes on labels; unset, the
             # address the label page was opened at.
