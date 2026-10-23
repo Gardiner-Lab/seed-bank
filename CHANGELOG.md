@@ -5,6 +5,13 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Trellis Tools' look**: the header every module shares (Trellis Tools, then this module's icon and name,
+  its tabs, the person and Log out), and the suite's palette - green for what you do, brown for structure,
+  on warm paper-white - from static/trellis/trellis.css, copied in from the suite (design/sync.sh).
+- Trellis Tools' small icons instead of emoji: lines, seed lots and plants, labels, files, Sow, Harvest,
+  segregation tests, 3D views and the help page.
+
 ## [0.5.3] - 2026-10-23
 
 ### Changed
