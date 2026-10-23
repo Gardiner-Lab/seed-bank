@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-23
+
 ### Changed
 - A tick in the header of each list - lines, seed lots, plants, and a lot's plants sown - chooses
   every row it shows (what a search has left) for labels, or none; it is half-ticked when only some
