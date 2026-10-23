@@ -346,6 +346,38 @@ const App = {
       onchange: (e) => { if (e.target.checked) this.selected.add(code); else this.selected.delete(code); this.onSelection?.(); } });
   },
 
+  /**
+   * The header tick of a table's "Choose for labels" boxes: chooses every row the table shows (what
+   * a search has left), or none; ticked when all are chosen, half-ticked when some are. It follows
+   * the rows' own boxes as they change.
+   */
+  pickAll(codes) {
+    const box = el('input', { type: 'checkbox', title: 'Choose every row shown for labels', 'aria-label': 'Choose every row shown for labels' });
+    box.sync = () => {
+      const chosen = codes.filter((c) => this.selected.has(c)).length;
+      box.checked = chosen > 0 && chosen === codes.length;
+      box.indeterminate = chosen > 0 && chosen < codes.length;
+    };
+    box.addEventListener('click', (e) => e.stopPropagation());
+    box.addEventListener('change', () => {
+      for (const c of codes) { if (box.checked) this.selected.add(c); else this.selected.delete(c); }
+      for (const row of box.closest('table').querySelectorAll('tbody td.pick input')) row.checked = box.checked;
+      this.onSelection?.();
+    });
+    box.sync();
+    return box;
+  },
+
+  /** A table whose first column chooses rows for labels, with the select-all tick in that column's header. */
+  pickTable(head, codes, body) {
+    const all = this.pickAll(codes);
+    const table = el('table', { class: 'data' },
+      el('thead', {}, el('tr', {}, head.map((h, i) => (i === 0 ? el('th', { class: 'pick' }, all) : el('th', {}, h))))),
+      body);
+    table.addEventListener('change', (e) => { if (e.target !== all && e.target.closest('td.pick')) all.sync(); });
+    return table;
+  },
+
   listTable(view, rows) {
     if (!rows.length) {
       return el('div', { class: 'empty' }, el('p', {}, 'Nothing here yet.'),
@@ -364,8 +396,7 @@ const App = {
         r.zygosity, r.germination !== null && r.germination !== undefined ? `${r.germination}%` : '', r.sown || ''],
       plants: (r) => [r.line, r.lot, `#${r.number}${r.selected ? ' ★' : ''}`, r.status, r.zygosity, r.location, r.sown_on || ''],
     }[view];
-    return el('table', { class: 'data' },
-      el('thead', {}, el('tr', {}, head.map((h) => el('th', {}, h)))),
+    return this.pickTable(head, rows.map((r) => r.code),
       el('tbody', {}, rows.map((r) => el('tr', {
         class: `${r.used_up ? 'faded' : ''} clickable`, onclick: () => { location.hash = `${kind}=${r.code}`; },
       }, el('td', { class: 'pick' }, this.pick(r.code)), el('td', { class: 'code' }, r.code),
@@ -630,8 +661,7 @@ const App = {
             } }, '✕'))))))
           : el('p', { class: 'hint' }, 'Count resistant and sensitive seedlings on a selection plate to see whether a T2 lot carries one insertion (3:1) or a T3 lot is homozygous.')),
       this.section(`Plants sown (${rec.plants.length})`,
-        rec.plants.length ? el('table', { class: 'data' },
-          el('thead', {}, el('tr', {}, ['', 'Code', '#', 'Line', 'Status', 'Zygosity', 'Kept at', 'Harvested into'].map((h) => el('th', {}, h)))),
+        rec.plants.length ? this.pickTable(['', 'Code', '#', 'Line', 'Status', 'Zygosity', 'Kept at', 'Harvested into'], rec.plants.map((p) => p.code),
           el('tbody', {}, rec.plants.map((p) => el('tr', { class: 'clickable', onclick: () => { location.hash = `plant=${p.code}`; } },
             el('td', { class: 'pick' }, this.pick(p.code)), el('td', { class: 'code' }, p.code), el('td', {}, `#${p.number}${p.selected ? ' ★' : ''}`),
             el('td', {}, p.line), el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, p.location),

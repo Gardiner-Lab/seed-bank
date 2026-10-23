@@ -5,6 +5,26 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- A tick in the header of each list - lines, seed lots, plants, and a lot's plants sown - chooses
+  every row it shows (what a search has left) for labels, or none; it is half-ticked when only some
+  are chosen.
+- The labels page shows and prints the labels as the LabTAG DYMO label chosen, in place of its three
+  generic sizes.
+
+### Added
+- **Labels for the DYMO LabelWriter, on LabTAG labels.** On the labels page, choose a LabTAG DYMO
+  label - the LWCS labels made for the LabelWriter 550, or the DY4 range on LabTAG's DYMO-compatible
+  templates page. The page shows the labels as they will print on it, 🖨 Print prints them one to a
+  page of the label's size, and ⬇ DYMO files (for the region DYMO Connect is set to) downloads a zip
+  for DYMO Connect. The zip holds a ready
+  .dymo file for each printed label, to open and print in DYMO Connect, and a design with the labels
+  as a spreadsheet, to print many at once with Import data. Each sticker gets its code and lines
+  (shrunk to fit) and a QR code where it has room; a cap circle or strip gets the short code; labels
+  with several stickers (2 up, dots, tags) are filled in order. The LWCS labels have no published
+  template: they are laid out as the DY4 label of the same size, and DYMO Connect takes the roll in
+  the printer.
+
 ## [0.4.1] - 2026-10-21
 
 ### Added

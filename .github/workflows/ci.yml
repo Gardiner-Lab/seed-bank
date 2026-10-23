@@ -21,5 +21,6 @@ jobs:
           node-version: '22'
       - name: Check the page scripts
         run: |
-          for f in app/static/js/seeds.js app/static/js/labels.js; do node --check "$f"; done
+          for f in app/static/js/seeds.js app/static/js/labels.js app/static/js/dymo.js; do node --check "$f"; done
+          node tests/js/dymo.test.js
           cp app/static/js/viewer3d.js "$RUNNER_TEMP/viewer3d.mjs" && node --check "$RUNNER_TEMP/viewer3d.mjs"

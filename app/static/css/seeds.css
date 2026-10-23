@@ -159,30 +159,28 @@ ul.plain { list-style: none; padding: 0; margin: .3rem 0; }
 
 /* labels */
 .labels-help { max-width: 1000px; margin: .8rem auto; padding: 0 1rem; }
-.label-sheet { display: flex; flex-wrap: wrap; gap: 3mm; padding: 5mm; justify-content: flex-start; }
-.label { display: flex; gap: 2mm; align-items: center; border: 1px dashed #9ca3af; border-radius: 1.5mm; padding: 1.5mm 2mm;
-    background: #fff; overflow: hidden; break-inside: avoid; page-break-inside: avoid; font-family: Arial, sans-serif; color: #000; }
-.label .qr svg { display: block; width: 100%; height: 100%; }
-.label-text { min-width: 0; line-height: 1.15; }
-.label-code { font-weight: 700; font-family: ui-monospace, Consolas, monospace; }
-.label-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .label-missing { color: var(--danger); }
-.size-small .label { width: 38mm; height: 21mm; font-size: 6.5pt; }
-.size-small .qr { width: 16mm; height: 16mm; flex: none; }
-.size-small .label-code { font-size: 8pt; }
-.size-medium .label { width: 64mm; height: 34mm; font-size: 8.5pt; }
-.size-medium .qr { width: 27mm; height: 27mm; flex: none; }
-.size-medium .label-code { font-size: 12pt; }
-.size-large .label { width: 99mm; height: 38mm; font-size: 10pt; }
-.size-large .qr { width: 31mm; height: 31mm; flex: none; }
-.size-large .label-code { font-size: 14pt; }
+/* The labels as the DYMO label chosen: on screen, larger than life on their backing; printed,
+   one to a page of the label's size (the page size is set by labels.js). */
+.dymo-sheet { display: flex; flex-wrap: wrap; gap: 6mm; padding: 5mm; align-items: flex-start; }
+.dymo-label { background: #fff; border-radius: 2mm; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); padding: 2mm; line-height: 0; }
+.dymo-label svg { width: auto; height: auto; max-width: 100%; zoom: 1.6; }
+.dymo-label .cut { fill: none; stroke: #9ca3af; stroke-width: .006; stroke-dasharray: .03 .02; }
 @media print {
     .no-print { display: none !important; }
-    body { background: #fff; }
-    .label-sheet { padding: 0; }
-    .label { border-color: #d1d5db; }
+    body { margin: 0; background: #fff; }
+    .dymo-sheet { display: block; padding: 0; }
+    .dymo-label { box-shadow: none; border-radius: 0; padding: 0; break-after: page; overflow: hidden; }
+    .dymo-label:last-child { break-after: auto; }
+    .dymo-label svg { zoom: 1; width: 100%; height: 100%; }
+    .dymo-label .cut { display: none; }
 }
 
 /* the lab new records go to, for someone in several labs */
 .lab-pick { font-size: .85rem; color: var(--muted, #6b7280); margin-left: auto; }
 .lab-picker { font: inherit; margin-left: .3rem; padding: .1rem .3rem; border-radius: .3rem; }
+
+/* Files for DYMO Connect, on the labels page. */
+.dymo-export { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.dymo-export select { max-width: 22rem; }
+.dymo-hint { margin-top: 0; }
