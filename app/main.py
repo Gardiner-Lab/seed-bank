@@ -1,5 +1,5 @@
 """
-Seed Bank: the Gardiner Lab suite's record of plant lines, seed lots and plants.
+Seed Bank: Trellis Tools' record of plant lines, seed lots and plants.
 
 Lines, the seed lots they are kept as, and the plants grown from them, with
 how each descends from the others; which plasmids a line carries; phenotypes

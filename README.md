@@ -1,6 +1,6 @@
 # Seed Bank
 
-The Gardiner Lab suite's record of plant lines, the seed lots they are kept as, and the plants
+Trellis Tools' record of plant lines, the seed lots they are kept as, and the plants
 grown from them, with how each descends from the others.
 
 - **Lines** are wild types, mutants, transgenic events, populations and crosses.
@@ -31,7 +31,7 @@ grown from them, with how each descends from the others.
 
 ## Running it
 
-It runs inside the [Gardiner Lab suite](https://github.com/Gardiner-Lab/gardiner-lab-suite), behind
+It runs inside [Trellis Tools](https://github.com/Gardiner-Lab/gardiner-lab-suite), behind
 its proxy at `/seeds/`, signed in through the suite. It has no accounts of its own; don't expose it
 outside the proxy.
 
