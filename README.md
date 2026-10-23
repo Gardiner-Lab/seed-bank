@@ -21,7 +21,9 @@ grown from them, with how each descends from the others.
 - **Phenotypes** can be recorded on any line, lot or plant, with photos. **3D scans** (STL, PLY
   meshes and point clouds, OBJ, glTF) open in a viewer you can turn, and any other file can be
   attached as well.
-- **Labels** with QR codes are printed for seed bags, pots and boxes; a phone opens the record.
+- **Labels** with QR codes are printed for seed bags, pots and boxes; a phone opens the record. They
+  print from the browser, or go out as files for DYMO Connect on a LabTAG DYMO label (the LWCS labels
+  for the LabelWriter 550, or the DY4 range).
 - **Lab notebook links**: type `@` in a notebook page to link a lot, plant or line. Each record
   lists the notebook pages that mention it.
 - **Who sees what**: a lab's stocks are shared within the lab, and other labs don't see them.
