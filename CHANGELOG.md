@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-23
+
 ### Changed
 - Label QR codes open the suite's public address as an administrator set it on the suite dashboard's
   Hosting tab; SUITE_PUBLIC_URL counts until they do.
