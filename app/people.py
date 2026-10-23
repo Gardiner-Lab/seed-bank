@@ -88,6 +88,17 @@ def _read(path: str, sql: str, args=()) -> List[sqlite3.Row]:
         return []
 
 
+def public_url() -> str:
+    """
+    Where people reach the suite, for the QR codes on labels: as an administrator
+    set it on the dashboard's Hosting tab, else SUITE_PUBLIC_URL; '' for neither
+    (the labels page then uses its own address).
+    """
+    rows = _read(suite_path(), "SELECT value FROM settings WHERE key = 'hosting.public_url'")
+    value = rows[0]['value'] if rows else os.environ.get('SUITE_PUBLIC_URL', '')
+    return (value or '').rstrip('/')
+
+
 def directory_path() -> str:
     return os.environ.get('MOCLO_DATABASE_PATH', '/moclo/moclo.db')
 

@@ -42,7 +42,7 @@ outside the proxy.
 | `SUITE_DATABASE_PATH` | `/suite/suite.db` | labs and their leads (read only) |
 | `EDITOR_DATABASE_PATH` | `/editor/plasmid_editor.db` | plasmids (read only) |
 | `NOTEBOOK_DATABASE_PATH` | `/notebook/notebook.db` | notebook links (read only) |
-| `SUITE_PUBLIC_URL` | (the page's own address) | where phones reach the suite, for label QR codes |
+| `SUITE_PUBLIC_URL` | (the page's own address) | where phones reach the suite, for label QR codes; the suite dashboard's Hosting tab sets it instead |
 
 ## Development
 
