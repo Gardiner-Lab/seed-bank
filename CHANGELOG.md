@@ -5,6 +5,9 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Someone who has left (archived in the suite) is no longer offered in lists of people; their records stay.
+
 ## [0.5.1] - 2026-10-23
 
 ### Changed
