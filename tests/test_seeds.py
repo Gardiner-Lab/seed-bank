@@ -408,3 +408,14 @@ def test_label_codes_open_the_public_address_set_on_the_dashboard(world, monkeyp
     conn.commit()
     conn.close()
     assert people.public_url() == 'https://lab.example.org'
+
+
+def test_someone_who_left_is_not_offered_any_more(world):
+    from app import people
+    assert 'ben' in people.people()
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.execute('CREATE TABLE archived (username TEXT PRIMARY KEY, archived_at TEXT, archived_by TEXT)')
+    conn.execute("INSERT INTO archived VALUES ('ben', '2026-10-23T10:00:00Z', 'lead')")
+    conn.commit()
+    conn.close()
+    assert 'ben' not in people.people() and people.archived() == {'ben': '2026-10-23T10:00:00Z'}
