@@ -7,6 +7,8 @@
 
 const SB = window.SB;
 const url = (path) => `${SB.base}${path}`;
+/** One of Trellis Tools' small icons (static/trellis/glyphs/), in place of an emoji. */
+const glyph = (name) => el('img', { class: 'tt-glyph', src: url(`/static/trellis/glyphs/${name}.svg`), alt: '' });
 
 /* --- helpers ------------------------------------------------------------------ */
 
@@ -174,13 +176,13 @@ function localTime(stamp) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-const ICON = { line: '🧬', lot: '🫘', plant: '🌱' };
+const ICON = { line: 'line', lot: 'seedlot', plant: 'plant' };     // glyphs
 const KIND_NAME = { line: 'line', lot: 'seed lot', plant: 'plant' };
-const FILE_ICONS = { pdf: '📕', word: '📝', powerpoint: '📽️', excel: '📊', archive: '🗜️', sequence: '🧬', text: '📄', '3d': '🧊', image: '🖼️', file: '📎' };
+const FILE_ICONS = { pdf: 'pdf', word: 'doc', powerpoint: 'slides', excel: 'sheet', archive: 'archive', sequence: 'line', text: 'text', '3d': 'cube', image: 'image', file: 'attach' };
 const fileUrl = (id, download = false) => url(`/api/attachments/${encodeURIComponent(id)}${download ? '?download' : ''}`);
 const sizeLabel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`);
 const link = (item) => (item ? el('a', { href: `#${item.kind}=${item.code}`, class: `rec-link rec-${item.kind}` },
-  `${ICON[item.kind]} ${item.code}`, item.kind === 'line' ? ` ${item.name}` : item.kind === 'plant' ? ` #${item.number}` : '') : '—');
+  glyph(ICON[item.kind]), ` ${item.code}`, item.kind === 'line' ? ` ${item.name}` : item.kind === 'plant' ? ` #${item.number}` : '') : '—');
 const TRAITS = ['germination', 'rosette size', 'leaf colour', 'leaf shape', 'flowering time', 'height', 'branching',
   'seed set', 'fluorescence (GFP)', 'resistance (Basta)', 'resistance (kanamycin)', 'genotype (PCR)', 'phenotype', 'note'];
 
@@ -227,7 +229,7 @@ const App = {
         lots: 'Search seed lots by code, line, generation, location or source',
         plants: 'Search plants by code, line, lot, location or status' }[view] });
     const table = el('div', { class: 'list' });
-    const labelBtn = el('button', { class: 'btn btn-secondary', onclick: () => this.openLabels([...this.selected]) }, '🏷 Labels for selected');
+    const labelBtn = el('button', { class: 'btn btn-secondary', onclick: () => this.openLabels([...this.selected]) }, glyph('label'), ' Labels for selected');
     const draw = async () => {
       this[`q_${view}`] = query.value;
       const data = await api('GET', `/${view}?q=${encodeURIComponent(query.value)}`);
@@ -236,10 +238,10 @@ const App = {
     };
     let timer;
     query.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(draw, 250); });
-    this.onSelection = () => { labelBtn.disabled = !this.selected.size; labelBtn.textContent = `🏷 Labels for selected${this.selected.size ? ` (${this.selected.size})` : ''}`; };
+    this.onSelection = () => { labelBtn.disabled = !this.selected.size; labelBtn.replaceChildren(glyph('label'), ` Labels for selected${this.selected.size ? ` (${this.selected.size})` : ''}`); };
     put(main,
       el('div', { class: 'page-head' },
-        el('h1', {}, { lines: '🧬 Lines', lots: '🫘 Seed lots', plants: '🌱 Plants' }[view]),
+        el('h1', {}, glyph({ lines: 'line', lots: 'seedlot', plants: 'plant' }[view]), ' ', { lines: 'Lines', lots: 'Seed lots', plants: 'Plants' }[view]),
         el('span', { class: 'actions' },
           view === 'lines' ? el('button', { class: 'btn btn-primary', onclick: () => this.editLine() }, '＋ New line') : null,
           view === 'lots' ? el('button', { class: 'btn btn-primary', onclick: () => this.newLot() }, '＋ Seed lot') : null,
@@ -429,12 +431,12 @@ const App = {
 
   head(rec, title, subtitle, actions) {
     return el('div', { class: 'record-head' },
-      el('div', {}, el('div', { class: 'crumbs' }, el('a', { href: `#${rec.kind}s` }, `${ICON[rec.kind]} All ${KIND_NAME[rec.kind]}s`)),
+      el('div', {}, el('div', { class: 'crumbs' }, el('a', { href: `#${rec.kind}s` }, glyph(ICON[rec.kind]), ` All ${KIND_NAME[rec.kind]}s`)),
         el('h1', {}, el('span', { class: 'code-badge' }, rec.code), ' ', title),
         subtitle ? el('div', { class: 'hint' }, subtitle) : null),
       el('span', { class: 'actions' }, actions,
         el('button', { class: 'btn btn-secondary', title: 'A label with a QR code that opens this page',
-          onclick: () => this.openLabels([rec.code]) }, '🏷 Label'),
+          onclick: () => this.openLabels([rec.code]) }, glyph('label'), ' Label'),
         el('button', { class: 'btn btn-secondary', title: `Delete this ${KIND_NAME[rec.kind]}`, onclick: () => modal({
           title: `Delete ${rec.code}?`,
           build: (b) => b.append(el('p', {}, 'It is removed from the lists. Records that came from it keep it as their parent, ',
@@ -444,7 +446,7 @@ const App = {
             toast(`Deleted ${rec.code}`, 'success');
             location.hash = `${rec.kind}s`;
           } }],
-        }) }, '🗑')));
+        }) }, glyph('trash'))));
   },
 
   facts(pairs) {
@@ -480,7 +482,7 @@ const App = {
       this.section('Plasmids',
         rec.plasmids.length ? el('div', { class: 'chips' }, rec.plasmids.map((p) => el('a', {
           class: 'chip chip-plasmid', href: `${SB.editor}/editor?open=${encodeURIComponent(p.id)}`, target: '_blank', rel: 'noopener',
-          title: 'Open in the Plasmid Editor' }, `🧬 ${p.name}`))) : el('p', { class: 'hint' }, 'No plasmid recorded.'),
+          title: 'Open in the Plasmid Editor' }, glyph('plasmid'), ` ${p.name}`))) : el('p', { class: 'hint' }, 'No plasmid recorded.'),
         el('button', { class: 'btn btn-secondary btn-sm', onclick: () => this.editPlasmids(rec) }, 'Change plasmids…')),
       this.section('Pedigree',
         rec.pedigree?.parents?.length ? el('ul', { class: 'tree' }, tree(rec.pedigree)) : el('p', { class: 'hint' }, 'No parent lines recorded.'),
@@ -534,7 +536,7 @@ const App = {
       title: `Plasmids in ${rec.code} ${rec.name}`, wide: true,
       build: (body) => {
         const list = el('div', { class: 'chips' });
-        const draw = () => put(list, chosen.length ? chosen.map((p, i) => el('span', { class: 'chip chip-plasmid' }, `🧬 ${p.name} `,
+        const draw = () => put(list, chosen.length ? chosen.map((p, i) => el('span', { class: 'chip chip-plasmid' }, glyph('plasmid'), ` ${p.name} `,
           el('button', { class: 'chip-x', title: 'Remove', onclick: () => { chosen.splice(i, 1); draw(); } }, '×')))
           : el('span', { class: 'hint' }, 'None'));
         draw();
@@ -561,7 +563,7 @@ const App = {
         const list = el('div');
         const draw = () => put(list, chosen.length ? chosen.map((p, i) => el('div', { class: 'parent-row' },
           el('select', { onchange: (e) => { p.role = e.target.value; } }, this.meta.parent_roles.map((r) => el('option', { value: r, selected: r === p.role }, r))),
-          el('span', {}, `🧬 ${p.code} ${p.name}`),
+          el('span', {}, glyph('plasmid'), ` ${p.code} ${p.name}`),
           el('button', { class: 'icon-btn', title: 'Remove', onclick: () => { chosen.splice(i, 1); draw(); } }, '✕')))
           : el('p', { class: 'hint' }, 'None'));
         draw();
@@ -633,8 +635,8 @@ const App = {
     return el('div', {},
       this.head(rec, `${rec.line?.name || ''} ${rec.generation || ''}`,
         [rec.used_up ? 'used up' : null, rec.location && `kept in ${rec.location}`, rec.amount].filter(Boolean).join(' · '), [
-          el('button', { class: 'btn btn-primary', onclick: () => this.sow(rec) }, '🌱 Sow…'),
-          el('button', { class: 'btn btn-secondary', onclick: () => this.segTest(rec) }, '🧮 Segregation test…'),
+          el('button', { class: 'btn btn-primary', onclick: () => this.sow(rec) }, glyph('plant'), ' Sow…'),
+          el('button', { class: 'btn btn-secondary', onclick: () => this.segTest(rec) }, glyph('ratio'), ' Segregation test…'),
           el('button', { class: 'btn btn-secondary', onclick: () => formModal({
             title: `Edit ${rec.code}`,
             fields: [...(rec.plants.length ? [] : [{ name: 'line', label: 'Line (code)', value: rec.line?.code,
@@ -704,7 +706,7 @@ const App = {
         } }, again ? 'Send to eLab again' : '⟳ Send to eLab now');
       const link = e.url ? el('a', { href: e.url, target: '_blank', rel: 'noopener', title: 'Open its sample in eLab' }, `sample ${e.sample_id} ↗`) : null;
       line.classList.toggle('elab-failed', e.state === 'failed');
-      put(line, '🔗 In eLabJournal: ', link, link ? ' · ' : '', el('b', {}, said[0]), said[1], send);
+      put(line, glyph('link'), ' In eLabJournal: ', link, link ? ' · ' : '', el('b', {}, said[0]), said[1], send);
     };
     draw();
     return line;
@@ -774,10 +776,10 @@ const App = {
     return el('div', {},
       this.head(rec, `${rec.line?.name || ''} #${rec.number}`,
         [rec.lot?.generation, rec.status, rec.zygosity, rec.location && `at ${rec.location}`, rec.selected ? '★ selected' : null].filter(Boolean).join(' · '), [
-          el('button', { class: 'btn btn-primary', onclick: () => this.harvest(rec) }, '🫘 Harvest…'),
+          el('button', { class: 'btn btn-primary', onclick: () => this.harvest(rec) }, glyph('seedlot'), ' Harvest…'),
           el('button', { class: 'btn btn-secondary', onclick: () => this.cross(rec) }, '✕ Cross with…'),
           el('button', { class: 'btn btn-secondary', title: 'Make this plant the founder of a line of its own, e.g. an independent T1 transformant',
-            onclick: () => this.foundLine(rec) }, '🧬 Found a line…'),
+            onclick: () => this.foundLine(rec) }, glyph('line'), ' Found a line…'),
           el('button', { class: 'btn btn-secondary', onclick: () => formModal({
             title: `Edit ${rec.code}`,
             fields: [{ name: 'status', label: 'Status', type: 'select', options: this.meta.plant_status, value: rec.status },
@@ -924,14 +926,14 @@ const App = {
         el('img', { src: fileUrl(a.id), loading: 'lazy', alt: a.filename, onclick: () => window.open(fileUrl(a.id), '_blank', 'noopener') }),
         el('figcaption', {}, a.caption || a.filename, el('button', { class: 'icon-btn', title: 'Remove', onclick: () => remove(a) }, '✕'))))) : null,
       [...models, ...others].length ? el('ul', { class: 'file-list' }, [...models, ...others].map((a) => el('li', {},
-        el('span', { class: 'file-icon' }, FILE_ICONS[a.kind] || '📎'),
+        el('span', { class: 'file-icon' }, glyph(FILE_ICONS[a.kind] || 'attach')),
         el('a', { href: fileUrl(a.id), target: '_blank', rel: 'noopener' }, a.filename),
         el('span', { class: 'hint' }, ` ${sizeLabel(a.size)} · ${a.created_by || ''} · ${localTime(a.created_at)}`),
-        a.model ? el('button', { class: 'btn btn-secondary btn-sm', onclick: () => this.view3d(a) }, '🧊 View in 3D') : null,
+        a.model ? el('button', { class: 'btn btn-secondary btn-sm', onclick: () => this.view3d(a) }, glyph('cube'), ' View in 3D') : null,
         el('a', { class: 'btn btn-secondary btn-sm', href: fileUrl(a.id, true), title: 'Download' }, '⤓'),
         el('button', { class: 'icon-btn', title: 'Remove', onclick: () => remove(a) }, '✕')))) : null,
       el('label', { class: 'btn btn-secondary btn-sm', title: 'Photos, 3D scans (STL, PLY, OBJ, glTF) and any other file. You can also drop files here.' },
-        title ? '📎 Add photos or files…' : '📎 Add', input));
+        glyph('attach'), title ? ' Add photos or files…' : ' Add', input));
     zone.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); zone.classList.add('drop'); } });
     zone.addEventListener('dragleave', () => zone.classList.remove('drop'));
     zone.addEventListener('drop', async (e) => {
@@ -944,7 +946,7 @@ const App = {
 
   async view3d(a) {
     const holder = el('div', { class: 'viewer3d' }, el('p', { class: 'hint' }, 'Loading…'));
-    modal({ title: `🧊 ${a.filename}`, wide: true, build: (b) => b.append(holder,
+    modal({ title: a.filename, wide: true, build: (b) => b.append(holder,
       el('p', { class: 'hint' }, 'Drag to turn, scroll to zoom, right-drag to move.')) });
     try {
       const viewer = await import(url('/static/js/viewer3d.js'));
@@ -957,7 +959,7 @@ const App = {
   mentions(rec) {
     if (!rec.mentions?.length) return null;
     return this.section('In the lab notebook', el('ul', { class: 'plain' }, rec.mentions.map((m) => el('li', {},
-      el('a', { href: `${SB.notebook}/#note=${m.id}`, target: '_blank', rel: 'noopener' }, `📓 ${m.title}`),
+      el('a', { href: `${SB.notebook}/#note=${m.id}`, target: '_blank', rel: 'noopener' }, glyph('notebook'), ` ${m.title}`),
       el('span', { class: 'hint' }, m.owner ? ` · ${m.owner}` : ' · protocol library')))));
   },
 

@@ -4,12 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Labels · Seed Bank</title>
+    <link rel="stylesheet" href="{{ request.script_root }}/static/trellis/trellis.css?v={{ version }}">
     <link rel="stylesheet" href="{{ request.script_root }}/static/css/seeds.css?v={{ version }}">
 </head>
-<body class="labels-page">
-<header class="topbar no-print">
-    <a class="topbar-back" href="{{ request.script_root }}/">← Seed Bank</a>
-    <span class="topbar-title">🏷️ Labels</span>
+<body class="tt labels-page">
+<header class="tt-bar no-print">
+    <a class="tt-home" href="{{ request.script_root }}/" title="All of Trellis Tools"><img src="{{ request.script_root }}/static/trellis/trellis.svg" alt=""><span>Trellis Tools</span></a>
+    <a class="tt-module" href="{{ request.script_root }}/"><img src="{{ request.script_root }}/static/trellis/seeds.svg" alt="">Seed Bank</a><span class="tt-sub">Labels</span>
     <span class="dymo-export" title="Files for DYMO Connect (the LabelWriter 550's software), on LabTAG labels">
         <label class="hint">Label <select id="dymoStock"></select></label>
         <select id="dymoRegion" title="DYMO Connect's region: its label stock names differ between them">
@@ -17,7 +18,7 @@
             <option value="NA">North America</option>
         </select>
         <label class="hint" title="A QR code on each sticker that has room for one"><input type="checkbox" id="dymoQr" checked> QR</label>
-        <button class="btn btn-primary" onclick="window.print()" title="Print these labels, one to a page of the label's size">🖨 Print</button>
+        <button class="btn btn-primary" onclick="window.print()" title="Print these labels, one to a page of the label's size"><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/print.svg" alt=""> Print</button>
         <button class="btn" id="btnDymo" title="A zip of .dymo files to open and print in DYMO Connect">⬇ DYMO files</button>
     </span>
 </header>
