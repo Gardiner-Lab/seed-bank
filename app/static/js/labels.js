@@ -54,7 +54,7 @@ async function main() {
   const host = new URL(publicBase()).hostname;
   help.textContent = `${codes.length} label${codes.length === 1 ? '' : 's'}. The codes open ${publicBase()}/ on a phone.`
     + (['localhost', '127.0.0.1', '::1'].includes(host)
-      ? ' This is this computer\'s own address, which phones cannot reach: open this page through the server\'s name (e.g. http://UU115629:8080), or ask an administrator to set the suite's public address (dashboard, Hosting).' : '');
+      ? ' This is this computer\'s own address, which phones cannot reach: open this page through the server\'s name (e.g. http://UU115629:8080), or ask an administrator to set the suite’s public address (dashboard, Hosting).' : '');
   for (const code of codes) {
     const kind = kindOf(code);
     if (!kind) continue;
