@@ -48,7 +48,7 @@ def create_app() -> Flask:
             'logout': os.environ.get('SUITE_LOGOUT_URL', '/account/logout'),
             # Where phones reach the suite, for the codes on labels; unset, the
             # address the label page was opened at.
-            'public': os.environ.get('SUITE_PUBLIC_URL', '').rstrip('/'),
+            'public': people.public_url(),
         }
 
     def page(template: str):

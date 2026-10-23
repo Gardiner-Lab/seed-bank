@@ -396,3 +396,15 @@ def test_someone_in_two_labs_sees_both_and_chooses_where_new_records_go(as_user,
     assert zoe.get('/api/lab?lab=Gardiner Lab').get_json()['lab'] == 'Gardiner Lab'
     assert zoe.get('/api/lab').get_json()['can_change'] is False or zoe.get('/api/lab').get_json()['fixed']
     assert zoe.put('/api/lab', json={'code': 'OTH', 'lab': 'Other Lab'}).status_code == 403
+
+
+def test_label_codes_open_the_public_address_set_on_the_dashboard(world, monkeypatch):
+    from app import people
+    monkeypatch.setenv('SUITE_PUBLIC_URL', 'https://old.example.org/')
+    assert people.public_url() == 'https://old.example.org'
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)')
+    conn.execute("INSERT INTO settings VALUES ('hosting.public_url', 'https://lab.example.org')")
+    conn.commit()
+    conn.close()
+    assert people.public_url() == 'https://lab.example.org'
