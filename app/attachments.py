@@ -85,16 +85,16 @@ def listed(conn, record_kind: str, record_id: str) -> List[dict]:
 
 
 def _owner(conn, person: Person, record_kind: str, record_id: str):
-    """The record a file hangs on, checked visible; an observation through its record."""
+    """The record a file is added to or removed from, of one's own lab; an observation through its record."""
     if record_kind not in RECORD_KINDS:
         raise ValueError('Files go on a line, seed lot, plant or observation')
     if record_kind == 'observation':
         obs = conn.execute('SELECT * FROM observations WHERE id = ? AND deleted_at IS NULL', (record_id,)).fetchone()
         if obs is None:
             raise records.NotFound('No such observation')
-        records.visible(conn, person, obs['record_kind'], obs['record_id'])
+        records.changeable(conn, person, obs['record_kind'], obs['record_id'])
         return obs['id'], obs['record_kind'], obs['record_id']
-    row = records.visible(conn, person, record_kind, record_id)
+    row = records.changeable(conn, person, record_kind, record_id)
     return row['id'], record_kind, row['id']
 
 

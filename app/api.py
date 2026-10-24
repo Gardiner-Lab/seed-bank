@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from flask import Blueprint, Response, jsonify, request
 
-from app import attachments, people, records, sources, stats
+from app import attachments, chairs, growing, lineage, people, records, sources, stats
 
 api = Blueprint('api', __name__)
 
@@ -47,6 +47,7 @@ def me(person):
                                      'gene_expression': records.GENE_EXPRESSION, 'permits': records.PERMITS,
                                      'collections': records.COLLECTIONS},
                     'plant_status': records.PLANT_STATUS, 'parent_roles': records.PARENT_ROLES,
+                    'place_kinds': growing.PLACE_KINDS,
                     'ratios': list(stats.RATIOS)})
 
 
@@ -91,6 +92,9 @@ def search(person):
 def get_record(person, kind, ident):
     record = records.detail(person, _kind(kind), ident)
     record['mentions'] = sources.notebook_mentions(person, record['code'])
+    record['mine'] = records.can_change(person, record)
+    if not record['mine']:
+        record['chair_group'] = chairs.name_of(record['lab'] or '')
     return jsonify({'record': record})
 
 
@@ -252,3 +256,75 @@ def find_plasmids(person):
 @signed_in
 def plasmid_lines(person, plasmid_id):
     return jsonify({'lines': records.lines_with_plasmid(person, plasmid_id)})
+
+
+# --- growing: places, what grows where, scoring, phenotypes -----------------------------
+
+@api.get('/places')
+@signed_in
+def list_places(person):
+    return jsonify({'places': growing.list_places(person)})
+
+
+@api.post('/places')
+@signed_in
+def create_place(person):
+    place_id = growing.create_place(person, _body())
+    return jsonify({'id': place_id, 'places': growing.list_places(person)}), 201
+
+
+@api.put('/places/<place_id>')
+@signed_in
+def update_place(person, place_id):
+    growing.update_place(person, place_id, _body())
+    return jsonify({'places': growing.list_places(person)})
+
+
+@api.delete('/places/<place_id>')
+@signed_in
+def remove_place(person, place_id):
+    growing.remove_place(person, place_id)
+    return jsonify({'places': growing.list_places(person)})
+
+
+@api.get('/growing')
+@signed_in
+def what_grows(person):
+    return jsonify({'plants': growing.growing(person), 'places': growing.list_places(person)})
+
+
+@api.post('/plants/change')
+@signed_in
+def change_plants(person):
+    return jsonify({'changed': growing.change_plants(person, _body())})
+
+
+@api.post('/score')
+@signed_in
+def score(person):
+    return jsonify({'recorded': growing.score(person, _body())}), 201
+
+
+@api.get('/<kind>/<ident>/phenotypes')
+@signed_in
+def phenotypes(person, kind, ident):
+    return jsonify(growing.phenotypes(person, _kind(kind), ident))
+
+
+@api.get('/<kind>/<ident>/phenotypes.csv')
+@signed_in
+def phenotypes_csv(person, kind, ident):
+    name, text = growing.phenotypes_csv(person, _kind(kind), ident)
+    response = Response('﻿' + text, mimetype='text/csv')
+    response.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(name)}"
+    return response
+
+
+# --- a family tree, across the suite ---------------------------------------------------
+
+@api.get('/tree/<kind>/<path:ident>')
+@signed_in
+def family_tree(person, kind, ident):
+    if kind != 'plasmid':
+        _kind(kind)
+    return jsonify(lineage.family_tree(person, kind, ident))

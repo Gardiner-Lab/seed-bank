@@ -170,3 +170,43 @@ ul.plain { list-style: none; padding: 0; margin: .3rem 0; }
 .dymo-export { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .dymo-export select { max-width: 22rem; }
 .dymo-hint { margin-top: 0; }
+
+/* Growing: what grows where, by place; plants sown together are one row. */
+.grow-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .6rem 0; }
+.grow-actions .hint { margin-left: .3rem; }
+.place-card { background: var(--card); border: 1px solid var(--border); border-radius: .6rem; padding: .7rem .9rem; margin: .9rem 0; }
+.place-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; margin-bottom: .4rem; }
+.place-head h2 { margin: 0; font-size: 1.05rem; }
+.place-count { margin-left: auto; }
+tr.chosen td { background: var(--tt-green-soft); }
+tr.batch-plants td { background: var(--hover); padding-top: .3rem; padding-bottom: .3rem; }
+.place-form { display: grid; grid-template-columns: 1.2fr 1fr 1.6fr auto; gap: .5rem; align-items: end; margin-top: .8rem; }
+@media (max-width: 640px) { .place-form { grid-template-columns: 1fr; } }
+.row-actions { white-space: nowrap; text-align: right; }
+.section-actions { margin-bottom: .4rem; }
+
+/* Scoring many plants at once. */
+.score-head { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: .5rem; }
+@media (max-width: 640px) { .score-head { grid-template-columns: 1fr; } }
+.score-table { max-height: 55vh; overflow: auto; border: 1px solid var(--border); border-radius: .4rem; }
+.score-table input { width: 100%; box-sizing: border-box; }
+.score-value { max-width: 9rem; }
+table.summary td.num { text-align: right; }
+
+/* A family tree, across the suite. */
+.construct { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--tt-green); border-radius: .5rem;
+  padding: .6rem .8rem; margin-bottom: .6rem; }
+.construct-head { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.construct-head .btn { margin-left: auto; }
+.stocks { margin-top: .35rem; display: flex; flex-wrap: wrap; gap: .3rem .9rem; align-items: baseline; }
+.pages { margin-left: .5rem; font-size: .85rem; }
+.pages .tt-glyph { opacity: .8; }
+ul.tree.family > li { padding: .3rem 0; }
+li.tree-focus > a.rec-link { background: var(--tt-green-soft); border-radius: .3rem; padding: 0 .3rem; font-weight: 600; }
+
+/* A chair group's records: whose they are, and shown without what would change them. */
+.lab-tag { display: inline-block; margin-left: .4rem; padding: 0 .4rem; border-radius: .3rem; font-size: .72rem;
+  font-family: var(--tt-font, inherit); background: var(--tt-brown-soft); color: var(--tt-brown); vertical-align: middle; }
+.not-mine { margin: .4rem 0 0; padding: .35rem .6rem; border-radius: .4rem; background: var(--tt-brown-soft);
+  color: var(--tt-brown); font-size: .85rem; display: inline-block; }
+#main.readonly button:not([data-keep]), #main.readonly label.btn:not([data-keep]) { display: none !important; }
