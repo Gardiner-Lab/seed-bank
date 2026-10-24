@@ -5,6 +5,29 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Where plants grow.** A lab's places (growth chambers, greenhouses, rooms, with their conditions; Places… on
+  the Growing page). Sowing chooses the place, a position there and a treatment; a plant's place and treatment
+  can be changed (✎ Edit).
+- **Growing** tab: every plant still growing, by place, a row per sowing (lot, day, treatment, position) with its
+  age in days. Tick rows to move their plants, set their treatment, mark them discarded or dead, print labels,
+  or score them.
+- **Scoring**: one trait on many plants at once, as a sheet (Score plants… on a seed lot, Score… on Growing).
+- **Phenotype summary** on a seed lot and a line: what was recorded on their plants, by trait and treatment
+  (mean ± SD and range for measurements, counts for the rest), and every observation as a CSV.
+- An observation keeps a measurement's number and unit ("12.5 cm", or 12.5 with the unit cm).
+- **Family tree** on every line, seed lot and plant, and for a plasmid (#tree=plasmid:<id>): the plasmid its line
+  carries with its glycerol stocks in Lab Stocks, its pedigree and the seeds it came from, all that came of it,
+  and the notebook pages about each step. Reads Lab Stocks' database (STOCKS_DATABASE_PATH, /stocks/stocks.db).
+
+- **Chair groups**: the labs of a chair group (set on the suite dashboard's Labs tab) see each other's lines, seed
+  lots, plants and places, and their glycerol stocks in family trees, as in Lab Stocks. Only a record's own lab
+  changes it: another lab's record opens read-only, saying whose it is, and is marked with its lab in the lists.
+  A chair group's line can be a parent of yours, and its plant the father of your cross.
+
+### Changed
+- A record's own observations are headed "Observations", beside the new phenotype summary.
+
 ## [0.6.0] - 2026-10-23
 
 ### Changed

@@ -18,9 +18,9 @@ def _make(path, script, rows=()):
 
 @pytest.fixture()
 def world(monkeypatch):
-    """A seed bank beside a suite: two labs with a lead each, an admin, the editor and a notebook."""
+    """A seed bank beside a suite: two labs with a lead each, an admin, the editor, a notebook and Lab Stocks."""
     d = tempfile.mkdtemp()
-    paths = {k: os.path.join(d, f'{k}.db') for k in ('seeds', 'moclo', 'suite', 'editor', 'notebook')}
+    paths = {k: os.path.join(d, f'{k}.db') for k in ('seeds', 'moclo', 'suite', 'editor', 'notebook', 'stocks')}
     _make(paths['moclo'], 'CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT UNIQUE, is_admin INTEGER DEFAULT 0);',
           [('INSERT INTO users VALUES (?, ?, ?)', (u, u, 1 if u == 'boss' else 0))
            for u in ('ana', 'ben', 'lead', 'boss', 'zoe', 'loner')])
@@ -40,8 +40,12 @@ def world(monkeypatch):
     _make(paths['notebook'],
           'CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT, type TEXT, owner TEXT, updated_at TEXT, deleted_at TEXT);'
           'CREATE TABLE links (note_id TEXT, target_type TEXT, target_id TEXT);')
+    _make(paths['stocks'],
+          'CREATE TABLE glycerol (id TEXT PRIMARY KEY, code TEXT, lab TEXT, plasmid_id TEXT, plasmid_name TEXT, '
+          'clone TEXT, host TEXT, location TEXT, status TEXT, deleted_at TEXT);')
     for key, env in (('seeds', 'SEEDS_DATABASE_PATH'), ('moclo', 'MOCLO_DATABASE_PATH'), ('suite', 'SUITE_DATABASE_PATH'),
-                     ('editor', 'EDITOR_DATABASE_PATH'), ('notebook', 'NOTEBOOK_DATABASE_PATH')):
+                     ('editor', 'EDITOR_DATABASE_PATH'), ('notebook', 'NOTEBOOK_DATABASE_PATH'),
+                     ('stocks', 'STOCKS_DATABASE_PATH')):
         monkeypatch.setenv(env, paths[key])
     from app.main import create_app
     app = create_app()

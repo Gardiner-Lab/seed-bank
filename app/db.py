@@ -3,8 +3,12 @@ The seed bank's database.
 
     lines         a genetic identity: wild type, mutant, a transgenic event, a cross
     lots          seeds of a line and generation, with where they are kept
-    plants        one plant sown from a lot, numbered within its sowing
-    observations  what was seen on a plant, lot or line (a phenotype), with when and who
+    plants        one plant sown from a lot, numbered within its sowing: where it grows
+                  (a place, and a position in it) and under which treatment
+    places        where plants grow: a lab's growth chambers, greenhouses and rooms, with
+                  their conditions
+    observations  what was seen on a plant, lot or line (a phenotype), with when and who;
+                  a measurement keeps its number and unit, for summaries
     seg_tests     selection-plate counts on a lot, for segregation (3:1, 15:1, homozygous)
     line_parents  the lines a line came from: a cross's mother and father, a
                   transformant's background
@@ -85,6 +89,19 @@ CREATE TABLE IF NOT EXISTS plants (
 );
 CREATE INDEX IF NOT EXISTS idx_plants_lot ON plants(lot_id);
 CREATE INDEX IF NOT EXISTS idx_plants_line ON plants(line_id);
+
+CREATE TABLE IF NOT EXISTS places (
+    id TEXT PRIMARY KEY,
+    lab TEXT NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'growth chamber',
+    conditions TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_places_lab ON places(lab);
 
 CREATE TABLE IF NOT EXISTS line_parents (
     line_id TEXT NOT NULL,
@@ -210,6 +227,10 @@ def connect() -> _Connection:
 # eLabJournal's Plant Seed type) asks: added to databases from before them.
 LINE_ADDED = ['permit', 'biosafety', 'gmo_type', 'accession', 'collection', 'stock_center_number', 'stock_center_url',
               'selection_marker', 'gene_expression', 'mutation_info', 'construction']
+# Where a plant grows and how it is treated, and a measurement's number and
+# unit: added to databases from before them. (table, column, declaration)
+ADDED = [('plants', 'place_id', 'TEXT'), ('plants', 'treatment', "TEXT NOT NULL DEFAULT ''"),
+         ('observations', 'number', 'REAL'), ('observations', 'unit', "TEXT NOT NULL DEFAULT ''")]
 
 
 def initialize(db_path: Optional[str] = None) -> None:
@@ -227,3 +248,7 @@ def initialize(db_path: Optional[str] = None) -> None:
         for column in LINE_ADDED:
             if column not in have:
                 conn.execute(f"ALTER TABLE lines ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+        for table, column, declaration in ADDED:
+            if column not in {r[1] for r in conn.execute(f'PRAGMA table_info({table})')}:
+                conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {declaration}')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_plants_place ON plants(place_id)')

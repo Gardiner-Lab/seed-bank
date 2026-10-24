@@ -2,7 +2,8 @@
 /*
  * The Seed Bank page: lists of lines, seed lots and plants, and a page for
  * each, with what can be done to it (sow, harvest, cross, test, photograph).
- * Addresses: #lines, #lots, #plants, #line=L-0001, #lot=S-0001, #plant=P-0001.
+ * Addresses: #lines, #lots, #plants, #growing, #line=L-0001, #lot=S-0001, #plant=P-0001,
+ * #tree=lot:S-0001 (a record's family tree), #tree=plasmid:<id> (a plasmid's).
  */
 
 const SB = window.SB;
@@ -185,12 +186,32 @@ const link = (item) => (item ? el('a', { href: `#${item.kind}=${item.code}`, cla
   glyph(ICON[item.kind]), ` ${item.code}`, item.kind === 'line' ? ` ${item.name}` : item.kind === 'plant' ? ` #${item.number}` : '') : '—');
 const TRAITS = ['germination', 'rosette size', 'leaf colour', 'leaf shape', 'flowering time', 'height', 'branching',
   'seed set', 'fluorescence (GFP)', 'resistance (Basta)', 'resistance (kanamycin)', 'genotype (PCR)', 'phenotype', 'note'];
+const UNITS = ['cm', 'mm', 'days', 'leaves', 'g', 'mg', 'siliques', 'seeds', '%', 'score (0–5)'];
+const TREATMENTS = ['control', 'mock', 'drought', 'salt', 'heat', 'cold', 'high light', 'low light'];
+/** Whole days from a date (YYYY-MM-DD) to today, or null. */
+const daysSince = (date) => {
+  if (!date) return null;
+  const then = new Date(`${date}T00:00:00`);
+  return Number.isNaN(then.getTime()) ? null : Math.floor((Date.now() - then.getTime()) / 86400000);
+};
+/** A measurement as people write it: at most three significant decimals. */
+const fmt = (n) => (n === null || n === undefined ? '' : String(Math.round(n * 1000) / 1000));
 
 /* --- the app ----------------------------------------------------------------- */
 
 const App = {
   meta: null,
   selected: new Set(),
+
+  /** Whether this person changes a record of this lab: their own lab's (all, for an administrator). */
+  ownLab(lab) {
+    return !!this.meta.person.is_admin || this.meta.labs.some((l) => l.toLowerCase() === String(lab || '').toLowerCase());
+  },
+
+  /** A chair group's lab, beside a record of it in a list. */
+  labTag(lab) {
+    return this.ownLab(lab) ? null : el('span', { class: 'lab-tag', title: `${lab}'s, seen through your chair group: only ${lab} changes it` }, lab);
+  },
 
   async init() {
     try {
@@ -201,7 +222,9 @@ const App = {
       put(document.getElementById('main'), el('p', { class: 'empty' }, err.message));
       return;
     }
-    document.body.append(el('datalist', { id: 'traits' }, TRAITS.map((t) => el('option', { value: t }))));
+    document.body.append(el('datalist', { id: 'traits' }, TRAITS.map((t) => el('option', { value: t }))),
+      el('datalist', { id: 'units' }, UNITS.map((t) => el('option', { value: t }))),
+      el('datalist', { id: 'treatments' }, TREATMENTS.map((t) => el('option', { value: t }))));
     const lo = this.meta.line_options;
     for (const [id, list] of [['permits', lo.permits], ['collections', lo.collections]]) {
       document.body.append(el('datalist', { id }, list.map((v) => el('option', { value: v }))));
@@ -211,12 +234,16 @@ const App = {
   },
 
   route() {
+    document.getElementById('main').classList.remove('readonly');
     const hash = location.hash.slice(1) || 'lines';
     const record = hash.match(/^(line|lot|plant)=(.+)$/);
+    const tree = hash.match(/^tree=(line|lot|plant|plasmid):(.+)$/);
     for (const tab of document.querySelectorAll('.view-tab')) {
-      tab.classList.toggle('active', tab.dataset.view === (record ? `${record[1]}s` : hash));
+      tab.classList.toggle('active', tab.dataset.view === (record ? `${record[1]}s` : tree ? '' : hash));
     }
-    if (record) this.showRecord(record[1], decodeURIComponent(record[2]));
+    if (tree) this.showTree(tree[1], decodeURIComponent(tree[2]));
+    else if (record) this.showRecord(record[1], decodeURIComponent(record[2]));
+    else if (hash === 'growing') this.showGrowing();
     else this.showList(['lines', 'lots', 'plants'].includes(hash) ? hash : 'lines');
   },
 
@@ -227,7 +254,7 @@ const App = {
     const query = el('input', { type: 'search', class: 'list-search', value: this[`q_${view}`] || '',
       placeholder: { lines: 'Search lines by code, name, species, background or plasmid',
         lots: 'Search seed lots by code, line, generation, location or source',
-        plants: 'Search plants by code, line, lot, location or status' }[view] });
+        plants: 'Search plants by code, line, lot, place, position, treatment or status' }[view] });
     const table = el('div', { class: 'list' });
     const labelBtn = el('button', { class: 'btn btn-secondary', onclick: () => this.openLabels([...this.selected]) }, glyph('label'), ' Labels for selected');
     const draw = async () => {
@@ -389,19 +416,20 @@ const App = {
     const head = {
       lines: ['', 'Code', 'Name', 'Kind', 'Species', 'Plasmids', 'Seed lots', 'Plants'],
       lots: ['', 'Code', 'Line', 'Gen.', 'From', 'Location', 'Amount', 'Zygosity', 'Germ.', 'Sown'],
-      plants: ['', 'Code', 'Line', 'Lot', '#', 'Status', 'Zygosity', 'Location', 'Sown'],
+      plants: ['', 'Code', 'Line', 'Lot', '#', 'Status', 'Zygosity', 'Where', 'Treatment', 'Sown'],
     }[view];
     const kind = view.slice(0, -1);
     const cells = {
       lines: (r) => [r.name, r.line_kind, el('i', {}, r.species), r.plasmids, r.lots, r.plants],
       lots: (r) => [`${r.line}`, r.generation, r.from_plant || r.source || '—', r.location, r.amount,
         r.zygosity, r.germination !== null && r.germination !== undefined ? `${r.germination}%` : '', r.sown || ''],
-      plants: (r) => [r.line, r.lot, `#${r.number}${r.selected ? ' ★' : ''}`, r.status, r.zygosity, r.location, r.sown_on || ''],
+      plants: (r) => [r.line, r.lot, `#${r.number}${r.selected ? ' ★' : ''}`, r.status, r.zygosity,
+        [r.place, r.location].filter(Boolean).join(' · '), r.treatment, r.sown_on || ''],
     }[view];
     return this.pickTable(head, rows.map((r) => r.code),
       el('tbody', {}, rows.map((r) => el('tr', {
         class: `${r.used_up ? 'faded' : ''} clickable`, onclick: () => { location.hash = `${kind}=${r.code}`; },
-      }, el('td', { class: 'pick' }, this.pick(r.code)), el('td', { class: 'code' }, r.code),
+      }, el('td', { class: 'pick' }, this.pick(r.code)), el('td', { class: 'code' }, r.code, this.labTag(r.lab)),
       cells(r).map((c) => el('td', {}, c))))));
   },
 
@@ -422,6 +450,8 @@ const App = {
       return;
     }
     this.rec = rec;
+    // Another lab's (seen through a chair group): only what looks at it, nothing that changes it.
+    main.classList.toggle('readonly', rec.mine === false);
     const view = { line: () => this.lineView(rec), lot: () => this.lotView(rec), plant: () => this.plantView(rec) }[kind]();
     put(main, view, this.observations(rec), this.files(rec.kind, rec.code, rec.attachments, 'Photos, 3D scans and files'),
       this.mentions(rec), this.history(rec));
@@ -433,9 +463,14 @@ const App = {
     return el('div', { class: 'record-head' },
       el('div', {}, el('div', { class: 'crumbs' }, el('a', { href: `#${rec.kind}s` }, glyph(ICON[rec.kind]), ` All ${KIND_NAME[rec.kind]}s`)),
         el('h1', {}, el('span', { class: 'code-badge' }, rec.code), ' ', title),
-        subtitle ? el('div', { class: 'hint' }, subtitle) : null),
+        subtitle ? el('div', { class: 'hint' }, subtitle) : null,
+        rec.mine === false ? el('p', { class: 'not-mine' }, `${rec.lab}'s${rec.chair_group ? `, in your chair group ${rec.chair_group}` : ''}: `,
+          `you see it, only ${rec.lab} changes it.`) : null),
       el('span', { class: 'actions' }, actions,
-        el('button', { class: 'btn btn-secondary', title: 'A label with a QR code that opens this page',
+        el('a', { class: 'btn btn-secondary', href: `#tree=${rec.kind}:${rec.code}`,
+          title: 'Where it came from, from the plasmid on, and all that came of it, with the notebook pages about each' },
+        glyph('link'), ' Family tree'),
+        el('button', { class: 'btn btn-secondary', title: 'A label with a QR code that opens this page', 'data-keep': '',
           onclick: () => this.openLabels([rec.code]) }, glyph('label'), ' Label'),
         el('button', { class: 'btn btn-secondary', title: `Delete this ${KIND_NAME[rec.kind]}`, onclick: () => modal({
           title: `Delete ${rec.code}?`,
@@ -492,7 +527,8 @@ const App = {
         rec.lots.length ? el('table', { class: 'data' }, el('thead', {}, el('tr', {}, ['Code', 'Generation', 'Location'].map((h) => el('th', {}, h)))),
           el('tbody', {}, rec.lots.map((l) => el('tr', { class: 'clickable', onclick: () => { location.hash = `lot=${l.code}`; } },
             el('td', { class: 'code' }, l.code), el('td', {}, l.generation), el('td', {}, l.location)))))
-          : el('p', { class: 'hint' }, 'No seed lots yet: add one, or harvest plants of this line.')));
+          : el('p', { class: 'hint' }, 'No seed lots yet: add one, or harvest plants of this line.')),
+      this.phenotypeSummary(rec));
   },
 
   editLine(rec) {
@@ -663,11 +699,20 @@ const App = {
             } }, '✕'))))))
           : el('p', { class: 'hint' }, 'Count resistant and sensitive seedlings on a selection plate to see whether a T2 lot carries one insertion (3:1) or a T3 lot is homozygous.')),
       this.section(`Plants sown (${rec.plants.length})`,
-        rec.plants.length ? this.pickTable(['', 'Code', '#', 'Line', 'Status', 'Zygosity', 'Kept at', 'Harvested into'], rec.plants.map((p) => p.code),
+        rec.plants.length ? el('div', { class: 'section-actions' },
+          el('button', { class: 'btn btn-secondary btn-sm', title: 'One trait on many plants at once: the ticked ones, or all still growing',
+            onclick: () => {
+              const ticked = rec.plants.filter((p) => this.selected.has(p.code));
+              const plants = ticked.length ? ticked : rec.plants.filter((p) => p.status === 'growing');
+              this.scoreSheet(plants.length ? plants : rec.plants, rec.code);
+            } }, glyph('ruler'), ' Score plants…')) : null,
+        rec.plants.length ? this.pickTable(['', 'Code', '#', 'Status', 'Zygosity', 'Sown', 'Where', 'Treatment', 'Harvested into'], rec.plants.map((p) => p.code),
           el('tbody', {}, rec.plants.map((p) => el('tr', { class: 'clickable', onclick: () => { location.hash = `plant=${p.code}`; } },
             el('td', { class: 'pick' }, this.pick(p.code)), el('td', { class: 'code' }, p.code), el('td', {}, `#${p.number}${p.selected ? ' ★' : ''}`),
-            el('td', {}, p.line), el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, p.location),
+            el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, p.sown_on || ''),
+            el('td', {}, [p.place, p.location].filter(Boolean).join(' · ')), el('td', {}, p.treatment),
             el('td', {}, p.harvested.map((h, i) => [i ? ', ' : '', link(h)])))))) : el('p', { class: 'hint' }, 'None sown yet.')),
+      this.phenotypeSummary(rec),
       rec.descendants?.length ? this.section('Descendants', this.descendants(rec.descendants)) : null);
   },
 
@@ -712,13 +757,17 @@ const App = {
     return line;
   },
 
-  sow(rec) {
+  async sow(rec) {
+    const places = await this.loadPlaces();
     formModal({
       title: `Sow from ${rec.code}`,
       intro: 'Plants are numbered on from any sown before, and each gets a code for its label.',
       fields: [{ name: 'count', label: 'How many plants', type: 'number', min: 1, max: 500, value: 12 },
         { name: 'sown_on', label: 'Sown on', type: 'date', value: today() },
-        { name: 'location', label: 'Where', placeholder: 'e.g. Tray 3, growth chamber B' }],
+        this.placeField(places, rec.lab, ''),
+        { name: 'location', label: 'Position', placeholder: 'e.g. shelf 2, tray B' },
+        { name: 'treatment', label: 'Treatment', list: 'treatments', placeholder: 'e.g. control, drought, 10 µM ABA',
+          hint: 'Plants under one treatment are compared with those under another in the phenotype summary.' }],
       label: 'Sow',
       submit: async (v) => {
         const res = await api('POST', `/lots/${rec.code}/sow`, v);
@@ -775,23 +824,29 @@ const App = {
   plantView(rec) {
     return el('div', {},
       this.head(rec, `${rec.line?.name || ''} #${rec.number}`,
-        [rec.lot?.generation, rec.status, rec.zygosity, rec.location && `at ${rec.location}`, rec.selected ? '★ selected' : null].filter(Boolean).join(' · '), [
+        [rec.lot?.generation, rec.status, rec.zygosity, rec.place?.name && `in ${rec.place.name}`, rec.location && `at ${rec.location}`,
+          rec.treatment, rec.selected ? '★ selected' : null].filter(Boolean).join(' · '), [
           el('button', { class: 'btn btn-primary', onclick: () => this.harvest(rec) }, glyph('seedlot'), ' Harvest…'),
           el('button', { class: 'btn btn-secondary', onclick: () => this.cross(rec) }, '✕ Cross with…'),
           el('button', { class: 'btn btn-secondary', title: 'Make this plant the founder of a line of its own, e.g. an independent T1 transformant',
             onclick: () => this.foundLine(rec) }, glyph('line'), ' Found a line…'),
-          el('button', { class: 'btn btn-secondary', onclick: () => formModal({
+          el('button', { class: 'btn btn-secondary', onclick: async () => formModal({
             title: `Edit ${rec.code}`,
             fields: [{ name: 'status', label: 'Status', type: 'select', options: this.meta.plant_status, value: rec.status },
               { name: 'zygosity', label: 'Zygosity', type: 'select', options: this.meta.zygosity, value: rec.zygosity },
               { name: 'selected', label: 'Selected (★, a keeper)', type: 'checkbox', value: rec.selected },
               { name: 'sown_on', label: 'Sown on', type: 'date', value: rec.sown_on },
-              { name: 'location', label: 'Where', value: rec.location }, { name: 'notes', label: 'Notes', type: 'textarea', value: rec.notes }],
+              this.placeField(await this.loadPlaces(), rec.lab, rec.place?.id || ''),
+              { name: 'location', label: 'Position', value: rec.location },
+              { name: 'treatment', label: 'Treatment', list: 'treatments', value: rec.treatment },
+              { name: 'notes', label: 'Notes', type: 'textarea', value: rec.notes }],
             submit: async (v) => { await api('PUT', `/plants/${rec.code}`, v); this.reload(); },
           }) }, '✎ Edit')]),
       this.ancestry(rec),
       this.facts([['Line', link(rec.line)], ['Sown from', link(rec.lot)], ['Number', `#${rec.number}`], ['Sown on', rec.sown_on],
-        ['Where', rec.location], ['Status', rec.status], ['Zygosity', rec.zygosity], ['Selected', rec.selected ? '★ a keeper' : null],
+        ['Age', daysSince(rec.sown_on) !== null && rec.status === 'growing' ? `day ${daysSince(rec.sown_on)}` : null],
+        ['Grows in', rec.place ? [rec.place.name, el('span', { class: 'hint' }, ` ${rec.place.kind}${rec.place.conditions ? `, ${rec.place.conditions}` : ''}`)] : null],
+        ['Position', rec.location], ['Treatment', rec.treatment], ['Status', rec.status], ['Zygosity', rec.zygosity], ['Selected', rec.selected ? '★ a keeper' : null],
         ['Made by', `${rec.created_by || '—'} · ${localTime(rec.created_at)}`]]),
       rec.notes ? el('p', { class: 'description' }, rec.notes) : null,
       rec.harvested.length ? this.section('Seeds from this plant', el('p', {}, rec.harvested.map((h, i) => [i ? ', ' : '', link(h), el('span', { class: 'hint' }, ` ${h.generation} `)]))) : null,
@@ -866,6 +921,304 @@ const App = {
     });
   },
 
+  /* growing: places, the Growing page, moving and marking many plants -------------- */
+
+  async loadPlaces() {
+    this.places = (await api('GET', '/places')).places;
+    return this.places;
+  },
+
+  /** A choice of this lab's places (and none), for sowing or moving plants. */
+  placeField(places, lab, value) {
+    const own = places.filter((p) => !lab || p.lab.toLowerCase() === String(lab).toLowerCase());
+    return { name: 'place', label: 'Grows in', type: 'select', value,
+      options: [['', own.length ? '— no place —' : '— no places yet —'], ...own.map((p) => [p.id, `${p.name} (${p.kind})`])],
+      hint: own.length ? null : 'Add your growth chambers and greenhouses on the Growing page (Places…).' };
+  },
+
+  async showGrowing() {
+    const main = document.getElementById('main');
+    let data;
+    try { data = await api('GET', '/growing'); } catch (err) { put(main, el('p', { class: 'empty' }, err.message)); return; }
+    this.places = data.places;
+    const placeOf = Object.fromEntries(data.places.map((p) => [p.id, p]));
+    // Plants sown together (one lot, one day, one treatment, one position) are one row.
+    const batches = new Map();
+    for (const p of data.plants) {
+      const key = [p.place || '', p.lot, p.sown_on || '', p.treatment, p.location].join('|');
+      if (!batches.has(key)) batches.set(key, { ...p, key, place: p.place || '', plants: [] });
+      batches.get(key).plants.push(p);
+    }
+    const chosen = this.growChosen || (this.growChosen = new Set());
+    const query = el('input', { type: 'search', class: 'list-search', value: this.q_growing || '',
+      placeholder: 'Filter by line, seed lot, treatment or position' });
+    const body = el('div', {});
+    const count = el('span', { class: 'hint' });
+    const plantsChosen = () => [...batches.values()].filter((b) => chosen.has(b.key)).flatMap((b) => b.plants);
+    const act = (label, title, handler, primary = false) => el('button', { class: `btn ${primary ? 'btn-primary' : 'btn-secondary'} needs-choice`,
+      title, onclick: () => { const plants = plantsChosen(); if (plants.length) handler(plants); } }, label);
+    const actions = el('div', { class: 'grow-actions' },
+      act([glyph('ruler'), ' Score…'], 'Record one trait on every plant chosen', (plants) => this.scoreSheet(plants, `${plants.length} plants`, () => this.showGrowing()), true),
+      act('Move…', 'Move the plants chosen to another place or position', (plants) => this.movePlants(plants)),
+      act('Treatment…', 'Set the treatment of the plants chosen', (plants) => formModal({
+        title: `Treatment of ${plants.length} plant${plants.length > 1 ? 's' : ''}`,
+        fields: [{ name: 'treatment', label: 'Treatment', list: 'treatments', value: plants[0].treatment }],
+        submit: async (v) => { await api('POST', '/plants/change', { plants: plants.map((p) => p.code), ...v }); this.showGrowing(); },
+      })),
+      act('Mark as…', 'Discarded, dead, or harvested', (plants) => formModal({
+        title: `Mark ${plants.length} plant${plants.length > 1 ? 's' : ''}`,
+        intro: 'They leave this page. To keep a plant\'s seeds as a seed lot, use Harvest on the plant itself instead.',
+        fields: [{ name: 'status', label: 'Now', type: 'select', options: this.meta.plant_status.filter((s) => s !== 'growing'), value: 'discarded' }],
+        submit: async (v) => { await api('POST', '/plants/change', { plants: plants.map((p) => p.code), ...v }); this.showGrowing(); },
+      })),
+      act([glyph('label'), ' Labels'], 'Labels for the plants chosen', (plants) => this.openLabels(plants.map((p) => p.code))),
+      count);
+    const sync = () => {
+      const n = plantsChosen().length;
+      count.textContent = n ? `${n} plant${n > 1 ? 's' : ''} chosen` : 'Tick rows to act on their plants';
+      for (const b of actions.querySelectorAll('.needs-choice')) b.disabled = !n;
+    };
+    const draw = () => {
+      this.q_growing = query.value;
+      const q = query.value.trim().toLowerCase();
+      const shown = [...batches.values()].filter((b) => !q || [b.line, b.line_code, b.lot, b.generation, b.treatment, b.location]
+        .some((v) => String(v || '').toLowerCase().includes(q)));
+      const groups = new Map([...data.places.filter((p) => p.growing).map((p) => [p.id, []]), ['', []]]);
+      for (const b of shown) (groups.get(b.place) || groups.get('')).push(b);
+      const sections = [...groups.entries()].filter(([, list]) => list.length).map(([id, list]) => {
+        const place = placeOf[id];
+        const keys = list.filter((b) => b.mine).map((b) => b.key);
+        const all = el('input', { type: 'checkbox', title: 'Choose every row here', 'aria-label': 'Choose every row here',
+          onchange: (e) => { for (const k of keys) { if (e.target.checked) chosen.add(k); else chosen.delete(k); } draw(); } });
+        const n = keys.filter((k) => chosen.has(k)).length;
+        all.checked = n > 0 && n === keys.length; all.indeterminate = n > 0 && n < keys.length;
+        all.disabled = !keys.length;
+        return el('section', { class: 'place-card' },
+          el('div', { class: 'place-head' }, el('h2', {}, place ? place.name : 'No place recorded'),
+            place ? el('span', { class: 'chip' }, place.kind) : null, place ? this.labTag(place.lab) : null,
+            place?.conditions ? el('span', { class: 'hint' }, place.conditions) : null,
+            el('span', { class: 'hint place-count' }, `${list.reduce((s, b) => s + b.plants.length, 0)} plants`)),
+          el('table', { class: 'data' },
+            el('thead', {}, el('tr', {}, el('th', { class: 'pick' }, all), ['Line', 'Seed lot', 'Plants', 'Sown', 'Age', 'Treatment', 'Position'].map((h) => el('th', {}, h)))),
+            el('tbody', {}, list.map((b) => {
+              const open = this.growOpen?.has(b.key);
+              const nums = b.plants.map((p) => p.number);
+              return [el('tr', { class: `clickable ${chosen.has(b.key) ? 'chosen' : ''}`, title: 'Show its plants',
+                onclick: () => { this.growOpen = this.growOpen || new Set(); if (open) this.growOpen.delete(b.key); else this.growOpen.add(b.key); draw(); } },
+              el('td', { class: 'pick' }, b.mine ? el('input', { type: 'checkbox', checked: chosen.has(b.key), onclick: (e) => e.stopPropagation(),
+                onchange: (e) => { if (e.target.checked) chosen.add(b.key); else chosen.delete(b.key); draw(); } }) : null),
+              el('td', {}, el('a', { href: `#line=${b.line_code}`, onclick: (e) => e.stopPropagation() }, b.line), this.labTag(b.lab)),
+              el('td', {}, el('a', { href: `#lot=${b.lot}`, onclick: (e) => e.stopPropagation() }, b.lot), el('span', { class: 'hint' }, ` ${b.generation || ''}`)),
+              el('td', {}, `${b.plants.length} (#${Math.min(...nums)}${nums.length > 1 ? `–#${Math.max(...nums)}` : ''})`),
+              el('td', {}, b.sown_on || '—'),
+              el('td', {}, daysSince(b.sown_on) !== null ? `day ${daysSince(b.sown_on)}` : '—'),
+              el('td', {}, b.treatment || el('span', { class: 'hint' }, '—')),
+              el('td', {}, b.location)),
+              open ? el('tr', { class: 'batch-plants' }, el('td', {}), el('td', { colspan: 7 }, el('div', { class: 'chips' },
+                b.plants.map((p) => el('a', { class: 'chip', href: `#plant=${p.code}` }, `#${p.number}${p.selected ? ' ★' : ''}`))))) : null];
+            }))));
+      });
+      put(body, sections.length ? sections : el('div', { class: 'empty' },
+        el('p', {}, data.plants.length ? 'Nothing matches.' : 'Nothing is growing.'),
+        el('p', {}, 'Sow plants from a seed lot (Sow…) and choose where they grow; they are listed here until harvested, discarded or dead.')));
+      sync();
+    };
+    let timer;
+    query.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(draw, 150); });
+    put(main,
+      el('div', { class: 'page-head' }, el('h1', {}, glyph('plant'), ' Growing'),
+        el('span', { class: 'actions' }, el('button', { class: 'btn btn-secondary', onclick: () => this.managePlaces() }, glyph('lab'), ' Places…'))),
+      el('p', { class: 'hint' }, 'Every plant still growing, by where it grows; plants sown together are one row (open it for its plants). ',
+        'Tick rows to score, move, treat or mark their plants together.'),
+      actions, query, body);
+    draw();
+  },
+
+  movePlants(plants) {
+    const labs = [...new Set(plants.map((p) => p.lab.toLowerCase()))];
+    formModal({
+      title: `Move ${plants.length} plant${plants.length > 1 ? 's' : ''}`,
+      intro: labs.length > 1 ? 'These plants belong to different labs: a place of one lab cannot hold another\'s.' : null,
+      fields: [this.placeField(this.places || [], plants[0].lab, plants[0].place || ''),
+        { name: 'location', label: 'Position', placeholder: 'leave empty to keep each plant\'s', value: '' }],
+      label: 'Move',
+      submit: async (v) => {
+        const body = { plants: plants.map((p) => p.code), place: v.place };
+        if (v.location) body.location = v.location;
+        await api('POST', '/plants/change', body);
+        toast(`Moved ${plants.length} plant${plants.length > 1 ? 's' : ''}`, 'success');
+        this.showGrowing();
+      },
+    });
+  },
+
+  async managePlaces() {
+    await this.loadPlaces();
+    modal({
+      title: 'Places',
+      wide: true,
+      onClose: () => { if (location.hash === '#growing') this.showGrowing(); },
+      build: (body) => {
+        const list = el('div', {});
+        const draw = () => put(list, this.places.length ? el('table', { class: 'data' },
+          el('thead', {}, el('tr', {}, ['Name', 'Kind', 'Conditions', 'Growing', ''].map((h) => el('th', {}, h)))),
+          el('tbody', {}, this.places.map((p) => el('tr', {},
+            el('td', {}, el('b', {}, p.name), this.meta.labs.length > 1 && this.ownLab(p.lab) ? el('span', { class: 'hint' }, ` ${p.lab}`) : null),
+            el('td', {}, p.kind), el('td', {}, p.conditions), el('td', {}, p.growing),
+            el('td', { class: 'row-actions' }, p.mine === false ? this.labTag(p.lab) : [
+              el('button', { class: 'icon-btn', title: 'Change', onclick: () => edit(p) }, '✎'),
+              el('button', { class: 'icon-btn', title: p.growing ? 'Plants grow here: move them first' : 'Take off the list', disabled: !!p.growing,
+                onclick: async () => { this.places = (await api('DELETE', `/places/${p.id}`)).places; draw(); } }, '✕')])))))
+          : el('p', { class: 'hint' }, 'No places yet. Add your growth chambers, greenhouses and rooms, with their conditions.'));
+        const f = { name: el('input', { placeholder: 'e.g. Chamber 3, Greenhouse B' }),
+          kind: el('select', {}, this.meta.place_kinds.map((k) => el('option', { value: k }, k))),
+          conditions: el('input', { placeholder: 'e.g. 16 h light, 22 °C, 60% humidity' }) };
+        let editing = null;
+        const save = el('button', { class: 'btn btn-primary', onclick: async () => {
+          const v = { name: f.name.value.trim(), kind: f.kind.value, conditions: f.conditions.value.trim() };
+          try {
+            this.places = (editing ? await api('PUT', `/places/${editing.id}`, v)
+              : await api('POST', '/places', { ...v, lab: this.chosenLab })).places;
+          } catch (err) { toast(err.message, 'error'); return; }
+          editing = null; f.name.value = ''; f.conditions.value = ''; save.textContent = '＋ Add'; draw();
+        } }, '＋ Add');
+        const edit = (p) => { editing = p; f.name.value = p.name; f.kind.value = p.kind; f.conditions.value = p.conditions; save.textContent = 'Save'; f.name.focus(); };
+        draw();
+        body.append(list, el('div', { class: 'place-form' },
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Name'), f.name),
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Kind'), f.kind),
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Conditions'), f.conditions), save));
+      },
+      buttons: [{ label: 'Done', kind: 'secondary' }],
+    });
+  },
+
+  /* scoring and phenotype summaries --------------------------------------------------- */
+
+  /** One trait on many plants: a row each, Enter moves down. */
+  scoreSheet(plants, what, after) {
+    const head = { trait: el('input', { list: 'traits', placeholder: 'e.g. height, flowering time' }),
+      unit: el('input', { list: 'units', placeholder: 'cm, days… (for numbers)' }),
+      observed_on: el('input', { type: 'date', value: today() }) };
+    const rows = plants.map((p) => ({ p, value: el('input', { class: 'score-value' }), notes: el('input', { class: 'score-notes' }) }));
+    rows.forEach((row, i) => row.value.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); (rows[i + 1]?.value || head.trait).focus(); }
+    }));
+    modal({
+      title: `Score ${what}`,
+      wide: true,
+      build: (body) => {
+        body.append(el('div', { class: 'score-head' },
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Trait'), head.trait),
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Unit'), head.unit),
+          el('label', { class: 'field' }, el('span', { class: 'field-label' }, 'Date'), head.observed_on)),
+        el('p', { class: 'hint' }, 'A value per plant (Enter goes to the next); plants left empty are skipped.'),
+        el('div', { class: 'score-table' }, el('table', { class: 'data' },
+          el('thead', {}, el('tr', {}, ['Plant', 'Line', 'Treatment', 'Value', 'Notes'].map((h) => el('th', {}, h)))),
+          el('tbody', {}, rows.map(({ p, value, notes }) => el('tr', {},
+            el('td', { class: 'code' }, `${p.code} `, el('span', { class: 'hint' }, `#${p.number}`)),
+            el('td', {}, p.line || ''), el('td', {}, p.treatment || ''), el('td', {}, value), el('td', {}, notes)))))));
+        setTimeout(() => head.trait.focus(), 0);
+      },
+      buttons: [{ label: 'Cancel', kind: 'secondary' }, { label: 'Save', onClick: async () => {
+        const res = await api('POST', '/score', { trait: head.trait.value.trim(), unit: head.unit.value.trim(), observed_on: head.observed_on.value,
+          values: rows.map(({ p, value, notes }) => ({ plant: p.code, value: value.value.trim(), notes: notes.value.trim() })) });
+        toast(`Recorded ${res.recorded} observation${res.recorded > 1 ? 's' : ''}`, 'success');
+        if (after) after(); else this.reload();
+      } }],
+    });
+  },
+
+  /** What was seen on a lot's or line's plants, by trait and treatment; loaded after the page. */
+  phenotypeSummary(rec) {
+    const box = el('div', {}, el('p', { class: 'hint' }, 'Loading…'));
+    const section = this.section('Phenotype summary', box);
+    api('GET', `/${rec.kind}/${encodeURIComponent(rec.code)}/phenotypes`).then((data) => {
+      if (!data.count) {
+        put(box, el('p', { class: 'hint' }, `Nothing recorded on its plants yet. Score them (Score plants… on a seed lot, or on the Growing page) to compare treatments here.`));
+        return;
+      }
+      const rows = [];
+      for (const t of data.summary) {
+        t.groups.forEach((g, i) => rows.push(el('tr', {},
+          el('td', {}, i ? '' : el('b', {}, t.trait), i || !t.unit ? '' : el('span', { class: 'hint' }, ` (${t.unit})`)),
+          el('td', {}, g.treatment || el('span', { class: 'hint' }, 'none recorded')),
+          el('td', { class: 'num' }, g.n),
+          el('td', {}, g.mean !== undefined
+            ? [el('b', {}, fmt(g.mean)), g.sd !== null ? ` ± ${fmt(g.sd)}` : '', el('span', { class: 'hint' },
+              ` ${t.unit}${g.measured > 1 ? ` · ${fmt(g.min)}–${fmt(g.max)}` : ''}${g.measured < g.n ? ` · ${g.n - g.measured} not numbers` : ''}`)]
+            : g.counts.map(([v, n], j) => [j ? ' · ' : '', v, el('span', { class: 'hint' }, ` ×${n}`)])))));
+      }
+      put(box, el('table', { class: 'data summary' },
+        el('thead', {}, el('tr', {}, ['Trait', 'Treatment', 'n', 'Mean ± SD (range), or values seen'].map((h) => el('th', {}, h)))),
+        el('tbody', {}, rows)),
+      el('p', { class: 'hint' }, `${data.count} observation${data.count > 1 ? 's' : ''}${rec.kind === 'line' ? ' on plants of all its seed lots' : ' on its plants'}. `,
+        el('a', { href: url(`/api/${rec.kind}/${encodeURIComponent(rec.code)}/phenotypes.csv`) }, 'Download all as CSV'),
+        ' (one row per observation, for R or Excel).'));
+    }).catch((err) => put(box, el('p', { class: 'hint' }, err.message)));
+    return section;
+  },
+
+  /* a family tree, across the suite --------------------------------------------------- */
+
+  async showTree(kind, ident) {
+    const main = document.getElementById('main');
+    let t;
+    try { t = await api('GET', `/tree/${kind}/${encodeURIComponent(ident)}`); } catch (err) {
+      put(main, el('p', { class: 'empty' }, err.message)); return;
+    }
+    const pages = (list) => (list?.length ? el('span', { class: 'pages' }, glyph('notebook'),
+      list.slice(0, 3).map((m, i) => [i ? ', ' : ' ', el('a', { href: `${SB.notebook}/#note=${m.id}`, target: '_blank', rel: 'noopener' }, m.title)]),
+      list.length > 3 ? el('span', { class: 'hint' }, ` and ${list.length - 3} more`) : null) : null);
+    const node = (n) => {
+      if (n.hidden) return el('li', {}, el('span', { class: 'hint' }, `${n.code} (another lab's)`));
+      const about = n.kind === 'line' ? [n.line_kind, n.role && `(${n.role})`] : n.kind === 'lot' ? [n.generation, n.used_up && 'used up']
+        : [n.status, n.selected && '★', n.treatment];
+      const kids = [...(n.lots || []), ...(n.plants || []), ...(n.lines || [])];
+      const others = Object.entries(n.others || {});
+      return el('li', { class: n.focus ? 'tree-focus' : '' }, link(n), el('span', { class: 'hint' }, ` ${about.filter(Boolean).join(' ')}`),
+        n.ref ? el('span', { class: 'hint' }, ' (shown above)') : null, pages(n.mentions),
+        kids.length || others.length ? el('ul', {}, kids.map(node), others.length ? el('li', { class: 'hint' },
+          `+ ${others.reduce((s, [, c]) => s + c, 0)} more plants: ${others.map(([st, c]) => `${c} ${st}`).join(', ')}`) : null) : null);
+    };
+    const pedigree = (n) => el('li', { class: n.code === t.focus.code ? 'tree-focus' : '' }, n.role ? el('span', { class: 'role' }, n.role) : null, link(n),
+      el('span', { class: 'hint' }, ` ${n.line_kind || ''}`), pages(n.mentions),
+      n.parents?.length ? el('ul', {}, n.parents.map(pedigree)) : null);
+    const construct = (c) => el('div', { class: 'construct' },
+      el('div', { class: 'construct-head' }, glyph('plasmid'), ' ',
+        c.opens ? el('a', { href: `${SB.editor}/editor?open=${encodeURIComponent(c.id)}`, target: '_blank', rel: 'noopener' }, el('b', {}, c.name), ' ↗')
+          : el('b', {}, c.name),
+        el('span', { class: 'hint' }, [c.length ? ` ${c.length.toLocaleString()} bp` : '', c.confirmed ? ' · ✓ sequence confirmed' : '',
+          c.missing ? ' · no longer in the Plasmid Editor' : ''].join('')),
+        t.focus.kind !== 'plasmid' ? el('a', { class: 'btn btn-secondary btn-sm', href: `#tree=plasmid:${c.id}`, title: 'Every line made with this plasmid' }, 'Its whole tree') : null),
+      pages(c.mentions) ? el('div', {}, pages(c.mentions)) : null,
+      c.carried_by.length && t.focus.kind !== 'plasmid' ? el('div', { class: 'hint' }, 'Carried by ',
+        c.carried_by.map((l, i) => [i ? ', ' : '', el('a', { href: `#line=${l.code}` }, `${l.code} ${l.name}`)])) : null,
+      el('div', { class: 'stocks' }, el('span', { class: 'hint' }, 'Glycerol stocks: '),
+        c.stocks.length ? c.stocks.map((s) => el('span', { class: 'stock' },
+          el('a', { href: `${SB.stocks}/#glycerol=${encodeURIComponent(s.code)}`, target: '_blank', rel: 'noopener' }, glyph('stocks'), ` ${s.code}`),
+          el('span', { class: 'hint' }, ` ${[s.clone && `clone ${s.clone}`, s.host, s.location, s.status].filter(Boolean).join(' · ')}`), pages(s.mentions)))
+          : el('span', { class: 'hint' }, 'none in Lab Stocks')));
+    const title = t.focus.kind === 'plasmid' ? t.focus.name : t.focus.code;
+    const back = t.focus.kind === 'plasmid' ? null : el('a', { href: `#${t.focus.kind}=${t.focus.code}` }, glyph(ICON[t.focus.kind]), ` Back to ${t.focus.code}`);
+    put(main,
+      el('div', { class: 'record-head' }, el('div', {}, el('div', { class: 'crumbs' }, back),
+        el('h1', {}, glyph('link'), ' Family tree of ', title),
+        el('div', { class: 'hint' }, 'Where it came from and what came of it, across the Plasmid Editor, Lab Stocks and the seed bank, ',
+          'with the notebook pages about each step you can open.'))),
+      t.constructs.length ? this.section(t.focus.kind === 'plasmid' ? 'The plasmid' : 'Constructs', t.constructs.map(construct))
+        : t.focus.kind !== 'plasmid' ? this.section('Constructs', el('p', { class: 'hint' }, 'No plasmid recorded on this line or the lines it came from.')) : null,
+      t.pedigree?.parents?.length || t.chain.length ? this.section('Came from',
+        t.pedigree?.parents?.length ? el('ul', { class: 'tree' }, pedigree(t.pedigree)) : null,
+        t.chain.length ? el('div', { class: 'ancestry' }, el('span', { class: 'hint' }, 'Seeds: '),
+          t.chain.map((n, i) => [i ? el('span', { class: 'arrow' }, '→') : null, n.role && n.role !== 'parent' ? el('span', { class: 'role' }, n.role) : null, link(n), pages(n.mentions)]),
+          el('span', { class: 'arrow' }, '→'), el('b', {}, t.focus.code)) : null) : null,
+      this.section(t.focus.kind === 'plasmid' ? 'Lines made with it' : 'Led to',
+        t.descendants.length ? el('ul', { class: 'tree family' }, t.descendants.map(node))
+          : el('p', { class: 'hint' }, t.focus.kind === 'plasmid' ? 'No line in the seed bank carries it yet (a line\'s Change plasmids… records it).' : 'Nothing yet.'),
+        t.truncated ? el('p', { class: 'hint' }, 'A large tree: only its first few hundred steps are shown. Open a record further down for the rest.') : null));
+  },
+
   /* phenotypes, files, mentions, history ------------------------------------------ */
 
   observations(rec) {
@@ -875,7 +1228,9 @@ const App = {
         title: `Observation on ${rec.code}`,
         fields: [{ name: 'observed_on', label: 'Date', type: 'date', value: today() },
           { name: 'trait', label: 'Trait', list: 'traits', placeholder: 'e.g. flowering time, leaf colour, GFP' },
-          { name: 'value', label: 'Value', placeholder: 'e.g. day 24, pale, strong' },
+          { name: 'value', label: 'Value', placeholder: 'e.g. 24, pale, strong' },
+          { name: 'unit', label: 'Unit', list: 'units', placeholder: 'for a measurement: cm, days, leaves…',
+            hint: 'A number with a unit is summed up (mean, spread) with others of the same trait.' },
           { name: 'notes', label: 'Notes', type: 'textarea' }],
         submit: async (v) => {
           const { id } = await api('POST', `/${rec.kind}/${rec.code}/observations`, v);
@@ -888,10 +1243,11 @@ const App = {
       setTimeout(() => document.querySelector('.modal-body')?.append(el('label', { class: 'field' },
         el('span', { class: 'field-label' }, 'Photos or files'), el('input', { type: 'file', id: 'obsFiles', multiple: true }))), 0);
     };
-    return this.section(`Phenotypes (${rec.observations.length})`,
+    return this.section(`Observations (${rec.observations.length})`,
       el('button', { class: 'btn btn-secondary btn-sm', onclick: add }, '＋ Observation'),
       rec.observations.length ? el('div', { class: 'observations' }, rec.observations.map((o) => el('div', { class: 'observation' },
         el('div', { class: 'obs-head' }, el('b', {}, o.trait), o.value ? `: ${o.value}` : '',
+          o.unit && o.number !== null && !String(o.value).endsWith(o.unit) ? ` ${o.unit}` : '',
           el('span', { class: 'hint' }, ` · ${o.observed_on || localTime(o.created_at).slice(0, 10)} · ${o.created_by || ''}`),
           el('button', { class: 'icon-btn', title: 'Remove', onclick: async () => { await api('DELETE', `/observations/${o.id}`); this.reload(); } }, '✕')),
         o.notes ? el('div', {}, o.notes) : null,
@@ -929,7 +1285,7 @@ const App = {
         el('span', { class: 'file-icon' }, glyph(FILE_ICONS[a.kind] || 'attach')),
         el('a', { href: fileUrl(a.id), target: '_blank', rel: 'noopener' }, a.filename),
         el('span', { class: 'hint' }, ` ${sizeLabel(a.size)} · ${a.created_by || ''} · ${localTime(a.created_at)}`),
-        a.model ? el('button', { class: 'btn btn-secondary btn-sm', onclick: () => this.view3d(a) }, glyph('cube'), ' View in 3D') : null,
+        a.model ? el('button', { class: 'btn btn-secondary btn-sm', 'data-keep': '', onclick: () => this.view3d(a) }, glyph('cube'), ' View in 3D') : null,
         el('a', { class: 'btn btn-secondary btn-sm', href: fileUrl(a.id, true), title: 'Download' }, '⤓'),
         el('button', { class: 'icon-btn', title: 'Remove', onclick: () => remove(a) }, '✕')))) : null,
       el('label', { class: 'btn btn-secondary btn-sm', title: 'Photos, 3D scans (STL, PLY, OBJ, glTF) and any other file. You can also drop files here.' },

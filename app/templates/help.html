@@ -24,9 +24,12 @@
         <a href="#rules">Golden rules</a>
         <a href="#stock">Seeds from outside</a>
         <a href="#growing">Sowing and labels</a>
+        <a href="#places">Where plants grow</a>
         <a href="#transform">A transformation, T0 to T3</a>
         <a href="#cross">A cross</a>
         <a href="#phenotypes">Phenotypes, photos and 3D scans</a>
+        <a href="#scoring">Scoring and comparing treatments</a>
+        <a href="#tree">Family trees</a>
         <a href="#storage">Storage and stock</a>
         <a href="#notebook">Plasmids and the notebook</a>
         <a href="#special">Special cases</a>
@@ -106,14 +109,31 @@
     <section id="growing">
         <h2>Sowing, and labelling plants</h2>
         <ol class="steps">
-            <li>Open the lot you take seeds from, and <b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/plant.svg" alt=""> Sow</b>: how many plants, when, where (tray, chamber).
-                Each plant gets a code and the next number in that lot.</li>
+            <li>Open the lot you take seeds from, and <b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/plant.svg" alt=""> Sow</b>: how many plants, when, which <b>place</b>
+                they grow in (a growth chamber, a greenhouse), the <b>position</b> there (shelf, tray) and the
+                <b>treatment</b> if they get one. Each plant gets a code and the next number in that lot.</li>
+            <li>Sowing the same lot under two treatments (control and drought)? Sow twice, once per treatment, so each
+                plant knows its own.</li>
             <li>Tick the plants in the list and <b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/label.svg" alt=""> Labels for selected</b>: print pot labels. A phone camera on
                 the QR code opens the plant.</li>
             <li>If fewer plants come up than you sowed, set the others to <i>dead</i> (✎ Edit on the plant). Record
                 germination on the lot if you counted it.</li>
             <li>Mark the plants you keep as <b>★ selected</b> (✎ Edit), and the rest <i>discarded</i> when you throw them out.</li>
         </ol>
+    </section>
+
+    <section id="places">
+        <h2>Where plants grow</h2>
+        <ul>
+            <li>The <b>Growing</b> tab lists every plant still growing, by place, with how many days since sowing.
+                Plants sown together (one lot, one day, one treatment, one position) are one row; open it for its plants.</li>
+            <li><b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/lab.svg" alt=""> Places…</b> keeps your lab's list of growth chambers, greenhouses and rooms, with their
+                conditions (<i>16 h light, 22 °C</i>). Add them once; everyone in the lab sows into them.</li>
+            <li>Tick rows to <b>Move…</b> their plants (to another place or position), set their <b>Treatment…</b>,
+                <b>Mark as…</b> discarded or dead, print their <b>Labels</b>, or <b>Score…</b> them.</li>
+            <li>To keep a plant's seeds, use <b>Harvest</b> on the plant itself: that makes the seed lot. <i>Mark as
+                harvested</i> only takes plants off the Growing page.</li>
+        </ul>
     </section>
 
     <section id="transform">
@@ -167,13 +187,26 @@
         <h2>Phenotypes, photos and 3D scans</h2>
         <ul>
             <li>Record what you see on the <b>plant</b> (or on a lot, e.g. germination, or a line): <b>＋ Observation</b>,
-                with the <b>date</b>, a <b>trait</b> from the suggestions, and a <b>value</b> with its unit (<i>day 24</i>,
-                <i>4.2 cm</i>, <i>pale</i>).</li>
+                with the <b>date</b>, a <b>trait</b> from the suggestions, and a <b>value</b>. For a measurement give a
+                number and its <b>unit</b> (<i>4.2</i> and <i>cm</i>, or just <i>4.2 cm</i>): numbers are summed up,
+                words (<i>pale</i>, <i>strong</i>) are counted.</li>
             <li>Add the photos <b>with the observation</b> they show, so each photo has a date and a trait.</li>
             <li>3D scans (STL, PLY, OBJ, glTF) and other files (spreadsheets, PDFs) go under <b>Photos, 3D scans and files</b>
                 on the plant; drag them onto it. <b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/cube.svg" alt=""> View in 3D</b> shows a scan you can turn.</li>
             <li>The same trait words every time make phenotypes comparable: <i>flowering time</i>, not sometimes
                 <i>bolting</i> and sometimes <i>flowered</i>.</li>
+        </ul>
+    </section>
+
+    <section id="scoring">
+        <h2>Scoring and comparing treatments</h2>
+        <ul>
+            <li><b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/ruler.svg" alt=""> Score plants…</b> on a seed lot (or <b>Score…</b> on the Growing page) records one trait on
+                many plants at once: a row per plant, <i>Enter</i> goes to the next, plants left empty are skipped.</li>
+            <li>A seed lot's and a line's <b>Phenotype summary</b> puts together what was recorded on their plants, by
+                trait and by treatment: for numbers the mean ± SD and the range, for words how often each was seen.</li>
+            <li><b>Download all as CSV</b> gives every observation, one per row (line, lot, plant, treatment, date, trait,
+                value, number, unit), for R or Excel.</li>
         </ul>
     </section>
 
@@ -199,6 +232,21 @@
         </ul>
     </section>
 
+    <section id="tree">
+        <h2>Family trees</h2>
+        <ul>
+            <li><b><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/link.svg" alt=""> Family tree</b> on a line, seed lot or plant shows where it came from and what came of it,
+                across Trellis Tools: the <b>plasmid</b> its line carries (from the Plasmid Editor) with its
+                <b>glycerol stocks</b> (from Lab Stocks), the lines and seeds it descends from, and every seed lot and
+                plant that came from it.</li>
+            <li>Every step lists the <b>notebook pages</b> that link to it, as far as you may open them.</li>
+            <li>A plasmid's own tree (<b>Its whole tree</b>, or <b>Family tree</b> in the Plasmid Editor and on a glycerol
+                stock in Lab Stocks) lists every line made with it.</li>
+            <li>Only plants that led somewhere (harvested, starred, or written about in the notebook) are shown one by
+                one; the others of their sowing are counted.</li>
+        </ul>
+    </section>
+
     <section id="special">
         <h2>Special cases</h2>
         <dl class="faq">
@@ -210,7 +258,10 @@
             <dd>Make the line, then <b>＋ Seed lot</b> with the source <i>old stock, box 7</i> and whatever is known in the notes.
                 Its history starts there.</dd>
             <dt>A plant from a lot of another lab.</dt>
-            <dd>Other labs' stocks are not visible. Ask for seeds, then enter them as seeds from outside, with the source.</dd>
+            <dd>The labs of your <b>chair group</b> see each other's lines, seed lots, plants and places (marked with
+                their lab's name), but only a record's own lab changes it. Ask them for seeds, then enter them as seeds
+                from outside, with their lot's code as the source. A chair group's plant can be the <i>father</i> of a
+                cross you make (Cross with… on your own plant). Other labs' records are not visible at all.</dd>
             <dt>A mutant crossed into a reporter line, then selfed for several generations.</dt>
             <dd>✕ Cross once; every generation after that is a <img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/seedlot.svg" alt=""> Harvest of the plant you keep: F1, F2, F3… of the same cross line.</dd>
             <dt>I'm not sure which line a plant really is (it was mislabelled).</dt>

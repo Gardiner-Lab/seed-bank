@@ -7,11 +7,14 @@ Lines, seed lots and plants, and how they descend from each other.
                   stock centre, a colleague)
     a plant       is sown from a lot and numbered within it; it can be harvested
                   into a new lot (T1 -> T2), crossed, or found a line of its own
-                  (a T1 transformant becomes an independent event)
+                  (a T1 transformant becomes an independent event). It grows in
+                  a place (a growth chamber, a greenhouse; app/growing.py), at a
+                  position there, under a treatment.
 
 Records belong to the lab of whoever made them. Everyone in that lab sees and
-changes them; other labs do not see them at all; administrators see all.
-Every change is logged with who made it.
+changes them; the other labs of its chair group (app/chairs.py) see them, but do
+not change them; other labs do not see them at all; administrators see and
+change all. Every change is logged with who made it.
 """
 
 import re
@@ -76,7 +79,23 @@ def leads(person: Person, lab: str) -> bool:
     return person.is_admin or person.leads(lab) or lab.startswith('user:')
 
 
+def sees(person: Person) -> set:
+    """The labs (casefolded) whose records this person sees: theirs, and the other labs of their chair groups."""
+    cached = getattr(person, '_sees', None)
+    if cached is None:
+        from app import chairs
+        own = {n.casefold() for n in labs_of(person)}
+        cached = own | chairs.mates(own)
+        person._sees = cached
+    return cached
+
+
 def can_see(person: Person, row) -> bool:
+    return person.is_admin or (row['lab'] or '').casefold() in sees(person)
+
+
+def can_change(person: Person, row) -> bool:
+    """Their own lab's: a chair group's other labs see a record, but do not change it."""
     return person.is_admin or (row['lab'] or '').casefold() in {n.casefold() for n in labs_of(person)}
 
 
@@ -202,6 +221,14 @@ def visible(conn, person: Person, kind: str, ident: str):
     return row
 
 
+def changeable(conn, person: Person, kind: str, ident: str):
+    """A record this person may change: their own lab's."""
+    row = visible(conn, person, kind, ident)
+    if not can_change(person, row):
+        raise Forbidden(f"This {'seed lot' if kind == 'lot' else kind} is {row['lab']}'s: only its own lab changes it")
+    return row
+
+
 def _brief(conn, kind: str, record_id: Optional[str]) -> Optional[dict]:
     if not record_id:
         return None
@@ -296,7 +323,7 @@ def _add_plasmid(conn, line_id: str, plasmid: dict) -> None:
 def update_line(person: Person, ident: str, data: dict) -> None:
     fields = _line_fields(data, partial=True)
     with connect() as conn:
-        row = visible(conn, person, 'line', ident)
+        row = changeable(conn, person, 'line', ident)
         changes = _changed(row, fields)
         if fields:
             conn.execute(f'UPDATE lines SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
@@ -307,7 +334,7 @@ def update_line(person: Person, ident: str, data: dict) -> None:
 
 def set_plasmids(person: Person, ident: str, plasmids: List[dict]) -> None:
     with connect() as conn:
-        row = visible(conn, person, 'line', ident)
+        row = changeable(conn, person, 'line', ident)
         before = sorted(r['name'] for r in conn.execute('SELECT name FROM line_plasmids WHERE line_id = ?', (row['id'],)))
         conn.execute('DELETE FROM line_plasmids WHERE line_id = ?', (row['id'],))
         for p in plasmids or []:
@@ -319,7 +346,7 @@ def set_plasmids(person: Person, ident: str, plasmids: List[dict]) -> None:
 
 def set_parents(person: Person, ident: str, parents: List[dict]) -> None:
     with connect() as conn:
-        row = visible(conn, person, 'line', ident)
+        row = changeable(conn, person, 'line', ident)
         conn.execute('DELETE FROM line_parents WHERE line_id = ?', (row['id'],))
         for p in parents or []:
             _add_parent(conn, person, row['id'], p.get('id'), p.get('role') or 'parent')
@@ -376,7 +403,7 @@ def create_lot(person: Person, data: dict, *, from_plant: Optional[str] = None,
     fields = _lot_fields(data)
     with connect() as conn:
         if line_id is None:
-            line_id = visible(conn, person, 'line', _text(data.get('line')))['id']
+            line_id = changeable(conn, person, 'line', _text(data.get('line')))['id']
         # A lot belongs to its line's lab, whoever harvests it.
         lab = conn.execute('SELECT lab FROM lines WHERE id = ?', (line_id,)).fetchone()['lab']
         lot_id = _new_id()
@@ -394,13 +421,13 @@ def create_lot(person: Person, data: dict, *, from_plant: Optional[str] = None,
 def update_lot(person: Person, ident: str, data: dict) -> None:
     fields = _lot_fields(data, partial=True)
     with connect() as conn:
-        row = visible(conn, person, 'lot', ident)
+        row = changeable(conn, person, 'lot', ident)
         changes = _changed(row, fields)
         # Seeds put in the wrong line can be moved, until plants grow from them
         # (those plants would then be of the wrong line too).
         into = _text(data.get('line'))
         if into:
-            target = visible(conn, person, 'line', into)
+            target = changeable(conn, person, 'line', into)
             if target['id'] != row['line_id']:
                 if conn.execute('SELECT 1 FROM plants WHERE lot_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone():
                     raise ValueError('Plants were sown from this lot: its line can no longer be changed')
@@ -423,27 +450,41 @@ def sow(person: Person, lot_ident: str, data: dict) -> List[str]:
     if not 1 <= count <= MAX_PLANTS_PER_SOWING:
         raise ValueError(f'Sow 1 to {MAX_PLANTS_PER_SOWING} plants at a time')
     sown_on, location = _date(data.get('sown_on')), _text(data.get('location'), 200)
+    treatment = _text(data.get('treatment'), 200)
     with connect() as conn:
-        lot = visible(conn, person, 'lot', lot_ident)
+        lot = changeable(conn, person, 'lot', lot_ident)
+        place = place_for(conn, lot['lab'], data.get('place'))
         start = conn.execute('SELECT COALESCE(MAX(number), 0) FROM plants WHERE lot_id = ?', (lot['id'],)).fetchone()[0]
         made = []
         for i in range(1, count + 1):
             plant_id = _new_id()
-            conn.execute('INSERT INTO plants (id, code, lab, lot_id, line_id, number, sown_on, location, created_by) '
-                         'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            conn.execute('INSERT INTO plants (id, code, lab, lot_id, line_id, number, sown_on, location, place_id, '
+                         'treatment, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                          (plant_id, _code(conn, 'plant', lot['lab']), lot['lab'], lot['id'], lot['line_id'], start + i,
-                          sown_on, location, person.username))
+                          sown_on, location, place['id'] if place else None, treatment, person.username))
             made.append(plant_id)
         _log(conn, 'lot', lot['id'], person.username, f'sowed {count} plant{"s" if count > 1 else ""}'
-             f' (#{start + 1}–#{start + count})')
+             f' (#{start + 1}–#{start + count})' + (f' in {place["name"]}' if place else '')
+             + (f', {treatment}' if treatment else ''))
         return made
+
+
+def place_for(conn, lab: str, ident: Any) -> Optional[Any]:
+    """The place a plant of this lab is to grow in (none for an empty choice): one of its own lab's."""
+    ident = _text(ident, 40)
+    if not ident:
+        return None
+    row = conn.execute('SELECT * FROM places WHERE id = ? AND deleted_at IS NULL', (ident,)).fetchone()
+    if row is None or (row['lab'] or '').casefold() != (lab or '').casefold():
+        raise ValueError("No such place in this lab's list")
+    return row
 
 
 # --- plants -------------------------------------------------------------------------
 
 def update_plant(person: Person, ident: str, data: dict) -> None:
     fields: Dict[str, Any] = {}
-    for key, limit in (('location', 200), ('notes', 5000)):
+    for key, limit in (('location', 200), ('treatment', 200), ('notes', 5000)):
         if key in data:
             fields[key] = _text(data.get(key), limit)
     if 'sown_on' in data:
@@ -461,8 +502,13 @@ def update_plant(person: Person, ident: str, data: dict) -> None:
     if 'selected' in data:
         fields['selected'] = 1 if data.get('selected') else 0
     with connect() as conn:
-        row = visible(conn, person, 'plant', ident)
+        row = changeable(conn, person, 'plant', ident)
         changes = _changed(row, fields)
+        if 'place' in data:
+            place = place_for(conn, row['lab'], data.get('place'))
+            if (place['id'] if place else None) != row['place_id']:
+                fields['place_id'] = place['id'] if place else None
+                changes.append(f"place: {place['name'] if place else 'none'}")
         if fields:
             conn.execute(f'UPDATE plants SET {", ".join(f"{k} = ?" for k in fields)}, updated_at = CURRENT_TIMESTAMP '
                          'WHERE id = ?', (*fields.values(), row['id']))
@@ -477,12 +523,12 @@ def harvest(person: Person, plant_ident: str, data: dict) -> str:
     `line` names it, and the lot is its T1 unless a generation is given.
     """
     with connect() as conn:
-        plant = visible(conn, person, 'plant', plant_ident)
+        plant = changeable(conn, person, 'plant', plant_ident)
         lot = conn.execute('SELECT generation FROM lots WHERE id = ?', (plant['lot_id'],)).fetchone()
         line_id = plant['line_id']
         into = _text(data.get('line'))
         if into:
-            target = visible(conn, person, 'line', into)
+            target = changeable(conn, person, 'line', into)
             line_id = target['id']
     data = dict(data)
     if line_id != plant['line_id']:
@@ -504,7 +550,7 @@ def cross(person: Person, mother_ident: str, father_ident: str, data: dict) -> D
     plants' lines, carrying both lines' plasmids) and its F1 seed lot.
     """
     with connect() as conn:
-        mother = visible(conn, person, 'plant', mother_ident)
+        mother = changeable(conn, person, 'plant', mother_ident)
         father = visible(conn, person, 'plant', father_ident)
         if mother['id'] == father['id']:
             raise ValueError('Choose two different plants (harvest a plant to self it)')
@@ -536,7 +582,7 @@ def found_line(person: Person, plant_ident: str, data: dict) -> str:
     independent insertion event. Its seeds, harvested later, belong to the new line.
     """
     with connect() as conn:
-        plant = visible(conn, person, 'plant', plant_ident)
+        plant = changeable(conn, person, 'plant', plant_ident)
         old = conn.execute('SELECT * FROM lines WHERE id = ?', (plant['line_id'],)).fetchone()
         plasmids = [{'id': r['plasmid_id'], 'name': r['name']} for r in conn.execute(
             'SELECT plasmid_id, name FROM line_plasmids WHERE line_id = ?', (old['id'],))]
@@ -557,26 +603,47 @@ def found_line(person: Person, plant_ident: str, data: dict) -> str:
 
 # --- observations and segregation tests --------------------------------------------
 
-def add_observation(person: Person, kind: str, ident: str, data: dict) -> str:
+_MEASURED = re.compile(r'^([-+]?\d+(?:[.,]\d+)?)\s*([^\d\s][^\s]{0,11})?$')
+
+
+def measured(value: str, unit: str = '') -> tuple:
+    """
+    A value's number and unit when it is a measurement: "12.5" -> (12.5, unit),
+    "12,5 cm" -> (12.5, 'cm'); anything else (a colour, "early") -> (None, unit).
+    """
+    m = _MEASURED.match(value.strip())
+    if not m:
+        return None, unit
+    return float(m.group(1).replace(',', '.')), unit or (m.group(2) or '')
+
+
+def insert_observation(conn, person: Person, kind: str, record_id: str, data: dict) -> str:
     trait = _text(data.get('trait'), 200)
     if not trait:
         raise ValueError('What was observed? (the trait, e.g. "flowering", "leaf colour")')
+    value = _text(data.get('value'), 500)
+    number, unit = measured(value, _text(data.get('unit'), 20))
+    obs_id = _new_id()
+    conn.execute('INSERT INTO observations (id, record_kind, record_id, observed_on, trait, value, number, unit, notes, '
+                 'created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 (obs_id, kind, record_id, _date(data.get('observed_on')), trait, value, number, unit,
+                  _text(data.get('notes'), 5000), person.username))
+    shown = f'{value[:80]} {unit}' if unit and number is not None and not value.endswith(unit) else value[:80]
+    _log(conn, kind, record_id, person.username, f'observed {trait}: {shown}')
+    return obs_id
+
+
+def add_observation(person: Person, kind: str, ident: str, data: dict) -> str:
     with connect() as conn:
-        row = visible(conn, person, kind, ident)
-        obs_id = _new_id()
-        conn.execute('INSERT INTO observations (id, record_kind, record_id, observed_on, trait, value, notes, created_by) '
-                     'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                     (obs_id, kind, row['id'], _date(data.get('observed_on')), trait,
-                      _text(data.get('value'), 500), _text(data.get('notes'), 5000), person.username))
-        _log(conn, kind, row['id'], person.username, f'observed {trait}: {_text(data.get("value"), 80)}')
-        return obs_id
+        row = changeable(conn, person, kind, ident)
+        return insert_observation(conn, person, kind, row['id'], data)
 
 
 def _observation_record(conn, person: Person, obs_id: str):
     obs = conn.execute('SELECT * FROM observations WHERE id = ? AND deleted_at IS NULL', (obs_id,)).fetchone()
     if obs is None:
         raise NotFound('No such observation')
-    visible(conn, person, obs['record_kind'], obs['record_id'])
+    changeable(conn, person, obs['record_kind'], obs['record_id'])
     return obs
 
 
@@ -598,7 +665,7 @@ def add_seg_test(person: Person, lot_ident: str, data: dict) -> str:
     if expected not in stats.RATIOS:
         raise ValueError(f'expected must be one of {", ".join(stats.RATIOS)}')
     with connect() as conn:
-        lot = visible(conn, person, 'lot', lot_ident)
+        lot = changeable(conn, person, 'lot', lot_ident)
         test_id = _new_id()
         conn.execute('INSERT INTO seg_tests (id, lot_id, tested_on, selection, resistant, sensitive, expected, notes, '
                      'created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -614,7 +681,7 @@ def remove_seg_test(person: Person, test_id: str) -> None:
         t = conn.execute('SELECT * FROM seg_tests WHERE id = ? AND deleted_at IS NULL', (test_id,)).fetchone()
         if t is None:
             raise NotFound('No such test')
-        visible(conn, person, 'lot', t['lot_id'])
+        changeable(conn, person, 'lot', t['lot_id'])
         conn.execute('UPDATE seg_tests SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (test_id,))
         _log(conn, 'lot', t['lot_id'], person.username, 'removed a segregation test')
 
@@ -624,7 +691,7 @@ def remove_seg_test(person: Person, test_id: str) -> None:
 def delete(person: Person, kind: str, ident: str) -> None:
     """Remove a record that nothing else depends on (kept, out of sight)."""
     with connect() as conn:
-        row = visible(conn, person, kind, ident)
+        row = changeable(conn, person, kind, ident)
         if kind == 'line':
             used = conn.execute('SELECT COUNT(*) FROM lots WHERE line_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone()[0] \
                 + conn.execute('SELECT COUNT(*) FROM plants WHERE line_id = ? AND deleted_at IS NULL', (row['id'],)).fetchone()[0]
@@ -692,14 +759,17 @@ def list_plants(person: Person, q: str = '', limit: int = 500) -> List[dict]:
     like = f'%{q.strip()}%'
     with connect() as conn:
         rows = conn.execute(
-            'SELECT p.*, l.name AS line_name, l.code AS line_code, s.code AS lot_code, s.generation '
+            'SELECT p.*, l.name AS line_name, l.code AS line_code, s.code AS lot_code, s.generation, pl.name AS place '
             'FROM plants p JOIN lines l ON l.id = p.line_id JOIN lots s ON s.id = p.lot_id '
+            'LEFT JOIN places pl ON pl.id = p.place_id '
             'WHERE p.deleted_at IS NULL AND (p.code LIKE ? OR l.name LIKE ? OR s.code LIKE ? OR p.location LIKE ? '
-            'OR p.status LIKE ? OR p.notes LIKE ?) ORDER BY p.created_at DESC, p.number', (like,) * 6).fetchall()
+            'OR p.status LIKE ? OR p.notes LIKE ? OR p.treatment LIKE ? OR pl.name LIKE ?) '
+            'ORDER BY p.created_at DESC, p.number', (like,) * 8).fetchall()
         return [{'id': r['id'], 'code': r['code'], 'number': r['number'], 'line': r['line_name'],
                  'line_code': r['line_code'], 'lot': r['lot_code'], 'generation': r['generation'],
                  'status': r['status'], 'zygosity': r['zygosity'], 'selected': bool(r['selected']),
-                 'location': r['location'], 'sown_on': r['sown_on'], 'lab': r['lab']}
+                 'location': r['location'], 'place': r['place'] or '', 'treatment': r['treatment'],
+                 'sown_on': r['sown_on'], 'lab': r['lab']}
                 for r in rows if can_see(person, r)][:limit]
 
 
@@ -716,7 +786,7 @@ def search(person: Person, q: str, limit: int = 20) -> List[dict]:
 def _extras(conn, kind: str, record_id: str) -> Dict[str, Any]:
     from app import attachments
     obs = [dict(r) for r in conn.execute(
-        'SELECT id, observed_on, trait, value, notes, created_by, created_at FROM observations '
+        'SELECT id, observed_on, trait, value, number, unit, notes, created_by, created_at FROM observations '
         'WHERE record_kind = ? AND record_id = ? AND deleted_at IS NULL ORDER BY COALESCE(observed_on, created_at) DESC',
         (kind, record_id))]
     for o in obs:
@@ -767,10 +837,11 @@ def lot_detail(person: Person, ident: str) -> dict:
                               'ORDER BY COALESCE(tested_on, created_at) DESC', (row['id'],)):
             tests.append({**dict(t), **stats.assess(t['resistant'], t['sensitive'], t['expected'])})
         plants = [dict(_brief(conn, 'plant', r['id']), zygosity=r['zygosity'], selected=bool(r['selected']),
-                       location=r['location'], harvested=[_brief(conn, 'lot', h['id']) for h in conn.execute(
+                       location=r['location'], treatment=r['treatment'], sown_on=r['sown_on'], place=r['place'] or '',
+                       harvested=[_brief(conn, 'lot', h['id']) for h in conn.execute(
                            'SELECT id FROM lots WHERE from_plant_id = ? AND deleted_at IS NULL', (r['id'],))])
-                  for r in conn.execute('SELECT * FROM plants WHERE lot_id = ? AND deleted_at IS NULL ORDER BY number',
-                                        (row['id'],))]
+                  for r in conn.execute('SELECT p.*, pl.name AS place FROM plants p LEFT JOIN places pl ON pl.id = p.place_id '
+                                        'WHERE p.lot_id = ? AND p.deleted_at IS NULL ORDER BY p.number', (row['id'],))]
         return {**dict(row), 'kind': 'lot', 'line': _brief(conn, 'line', row['line_id']),
                 'from_plant': _brief(conn, 'plant', row['from_plant_id']),
                 'father_plant': _brief(conn, 'plant', row['father_plant_id']),
@@ -790,7 +861,9 @@ def plant_detail(person: Person, ident: str) -> dict:
         siblings = [_brief(conn, 'plant', r['id']) for r in conn.execute(
             'SELECT id FROM plants WHERE lot_id = ? AND id != ? AND deleted_at IS NULL ORDER BY number',
             (row['lot_id'], row['id']))]
-        return {**dict(row), 'kind': 'plant', 'selected': bool(row['selected']),
+        place = conn.execute('SELECT id, name, kind, conditions FROM places WHERE id = ?', (row['place_id'],)).fetchone() \
+            if row['place_id'] else None
+        return {**dict(row), 'kind': 'plant', 'selected': bool(row['selected']), 'place': dict(place) if place else None,
                 'line': _brief(conn, 'line', row['line_id']), 'lot': lot, 'harvested': harvested,
                 'siblings': siblings, 'next_generation': next_generation(lot['generation'] if lot else ''),
                 'ancestry': _ancestry(conn, 'plant', row['id']), 'descendants': _descendants(conn, 'plant', row['id']),
