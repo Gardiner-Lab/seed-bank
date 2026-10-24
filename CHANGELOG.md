@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-23
+
 ### Added
 - **Where plants grow.** A lab's places (growth chambers, greenhouses, rooms, with their conditions; Places… on
   the Growing page). Sowing chooses the place, a position there and a treatment; a plant's place and treatment
