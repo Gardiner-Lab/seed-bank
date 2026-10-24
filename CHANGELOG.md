@@ -5,7 +5,7 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-10-23
+## [0.7.0] - 2026-10-24
 
 ### Added
 - **Where plants grow.** A lab's places (growth chambers, greenhouses, rooms, with their conditions; Places… on
