@@ -5,8 +5,10 @@ Kept in the seed bank's database, so the suite's backup takes them along.
 Whoever can see a record sees its files, and whoever can change it adds them.
 Photos in common formats are shown in the page; 3D models (STL, PLY, OBJ, glTF)
 open in the page's 3D viewer, which reads them as data; PDFs open in the
-browser's viewer. Everything else downloads, and types a browser could run as
-a page are sent as plain bytes. Removing a file hides it but keeps it.
+browser's viewer, and so do Word, PowerPoint and Excel files, turned into a
+PDF by the suite's converter (viewer.py); text files open as plain text.
+Everything else downloads, and types a browser could run as a page are sent
+as plain bytes. Removing a file hides it but keeps it.
 """
 
 import hashlib
@@ -15,7 +17,7 @@ import re
 import secrets
 from typing import Dict, List
 
-from app import records
+from app import records, viewer
 from app.db import connect
 from app.people import Person
 
@@ -38,7 +40,8 @@ _SIGNATURES = [(b'\x89PNG\r\n\x1a\n', 'image/png'), (b'\xff\xd8\xff', 'image/jpe
 for _ext, _type in (('.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
                     ('.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
                     ('.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-                    ('.gb', 'chemical/x-genbank'), ('.dna', 'application/x-snapgene')):
+                    ('.gb', 'chemical/x-genbank'), ('.dna', 'application/x-snapgene'),
+                    ('.fa', 'text/x-fasta'), ('.fasta', 'text/x-fasta'), ('.fna', 'text/x-fasta')):
     mimetypes.add_type(_type, _ext)
 
 
@@ -74,6 +77,7 @@ def _summary(row) -> dict:
     return {'id': row['id'], 'filename': row['filename'], 'mime': row['mime'], 'size': row['size'],
             'kind': kind(row['mime']), 'image': row['mime'] in INLINE_TYPES,
             'preview': row['mime'] in PREVIEW_TYPES, 'model': row['mime'].startswith('model/'),
+            'view': viewer.converted(kind(row['mime'])) or kind(row['mime']) in viewer.TEXT_KINDS,
             'caption': row['caption'], 'created_by': row['created_by'], 'created_at': row['created_at']}
 
 
@@ -128,7 +132,8 @@ def fetch(person: Person, att_id: str) -> Dict:
             raise records.NotFound('No such file')
         _owner_any(conn, person, row)
     return {'data': bytes(row['data']), 'mime': row['mime'], 'filename': row['filename'],
-            'inline': row['mime'] in INLINE_TYPES, 'preview': row['mime'] in PREVIEW_TYPES, 'sha256': row['sha256']}
+            'inline': row['mime'] in INLINE_TYPES, 'preview': row['mime'] in PREVIEW_TYPES, 'sha256': row['sha256'],
+            'kind': kind(row['mime'])}
 
 
 def _owner_any(conn, person: Person, row) -> None:

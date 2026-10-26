@@ -419,3 +419,39 @@ def test_someone_who_left_is_not_offered_any_more(world):
     conn.commit()
     conn.close()
     assert 'ben' not in people.people() and people.archived() == {'ben': '2026-10-23T10:00:00Z'}
+
+
+def test_office_and_text_files_open_in_the_browser(as_user, monkeypatch):
+    import http.server
+    import threading
+    calls = []
+
+    class Converter(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers['Content-Length']))
+            calls.append((self.path, b'filename="crosses.pptx"' in body))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'%PDF-1.4 the crosses')
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(('127.0.0.1', 0), Converter)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    ana = as_user('ana')
+    line = _line(ana, 'Col-0')
+    pptx = b'PK\x03\x04' + b'\x00' * 40
+    slides, gb = _ok(ana.post(f"/api/line/{line['id']}/attachments", content_type='multipart/form-data',
+                              data={'file': [(io.BytesIO(pptx), 'crosses.pptx'), (io.BytesIO(b'LOCUS p1'), 'p1.gb')]}),
+                     201)['attachments']
+    assert slides['view'] is False and gb['view'] is True
+    assert ana.get(f"/api/attachments/{slides['id']}?view").headers['Content-Disposition'].startswith('attachment')
+    assert ana.get(f"/api/attachments/{gb['id']}?view").mimetype == 'text/plain'
+    monkeypatch.setenv('CONVERTER_URL', f'http://127.0.0.1:{server.server_port}')
+    for _ in range(2):
+        pdf = ana.get(f"/api/attachments/{slides['id']}?view")
+        assert pdf.mimetype == 'application/pdf' and pdf.data == b'%PDF-1.4 the crosses'
+    assert calls == [('/forms/libreoffice/convert', True)], 'converted once, then kept'
+    assert ana.get(f"/api/attachments/{slides['id']}?download").data == pptx
+    server.shutdown()

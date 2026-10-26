@@ -164,6 +164,13 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_record ON attachments(record_kind, record_id);
 
+-- An office file turned into a PDF to be shown in the browser, kept by the file's checksum.
+CREATE TABLE IF NOT EXISTS file_views (
+    sha256 TEXT PRIMARY KEY,
+    pdf BLOB NOT NULL,
+    made_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS changes (
     record_kind TEXT NOT NULL,
     record_id TEXT NOT NULL,

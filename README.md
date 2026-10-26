@@ -43,6 +43,7 @@ outside the proxy.
 | `EDITOR_DATABASE_PATH` | `/editor/plasmid_editor.db` | plasmids (read only) |
 | `NOTEBOOK_DATABASE_PATH` | `/notebook/notebook.db` | notebook links (read only) |
 | `SUITE_PUBLIC_URL` | (the page's own address) | where phones reach the suite, for label QR codes; the suite dashboard's Hosting tab sets it instead |
+| `CONVERTER_URL` | none | the suite's file converter (Gotenberg), to open Word, PowerPoint and Excel files in the browser as PDFs; unset, they download |
 
 ## Development
 

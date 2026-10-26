@@ -181,6 +181,8 @@ const ICON = { line: 'line', lot: 'seedlot', plant: 'plant' };     // glyphs
 const KIND_NAME = { line: 'line', lot: 'seed lot', plant: 'plant' };
 const FILE_ICONS = { pdf: 'pdf', word: 'doc', powerpoint: 'slides', excel: 'sheet', archive: 'archive', sequence: 'line', text: 'text', '3d': 'cube', image: 'image', file: 'attach' };
 const fileUrl = (id, download = false) => url(`/api/attachments/${encodeURIComponent(id)}${download ? '?download' : ''}`);
+// Office and text files open in the browser (an office file as a PDF); the original still downloads.
+const viewUrl = (id) => url(`/api/attachments/${encodeURIComponent(id)}?view`);
 const sizeLabel = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`);
 const link = (item) => (item ? el('a', { href: `#${item.kind}=${item.code}`, class: `rec-link rec-${item.kind}` },
   glyph(ICON[item.kind]), ` ${item.code}`, item.kind === 'line' ? ` ${item.name}` : item.kind === 'plant' ? ` #${item.number}` : '') : '—');
@@ -1283,7 +1285,8 @@ const App = {
         el('figcaption', {}, a.caption || a.filename, el('button', { class: 'icon-btn', title: 'Remove', onclick: () => remove(a) }, '✕'))))) : null,
       [...models, ...others].length ? el('ul', { class: 'file-list' }, [...models, ...others].map((a) => el('li', {},
         el('span', { class: 'file-icon' }, glyph(FILE_ICONS[a.kind] || 'attach')),
-        el('a', { href: fileUrl(a.id), target: '_blank', rel: 'noopener' }, a.filename),
+        el('a', { href: a.view ? viewUrl(a.id) : fileUrl(a.id), target: '_blank', rel: 'noopener',
+          title: a.view || a.preview ? 'Open it in a new tab' : 'Download, to open in its program' }, a.filename),
         el('span', { class: 'hint' }, ` ${sizeLabel(a.size)} · ${a.created_by || ''} · ${localTime(a.created_at)}`),
         a.model ? el('button', { class: 'btn btn-secondary btn-sm', 'data-keep': '', onclick: () => this.view3d(a) }, glyph('cube'), ' View in 3D') : null,
         el('a', { class: 'btn btn-secondary btn-sm', href: fileUrl(a.id, true), title: 'Download' }, '⤓'),
