@@ -68,7 +68,8 @@ def create_app() -> Flask:
 
     @app.route('/help')
     def help_page():
-        return page('help.html')
+        # Read without signing in, as About is: it explains the seed bank to someone who has no account yet.
+        return render_template('help.html', version=APP_VERSION, links=links())
 
     @app.route('/about')
     def about_page():

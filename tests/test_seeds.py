@@ -455,3 +455,13 @@ def test_office_and_text_files_open_in_the_browser(as_user, monkeypatch):
     assert calls == [('/forms/libreoffice/convert', True)], 'converted once, then kept'
     assert ana.get(f"/api/attachments/{slides['id']}?download").data == pptx
     server.shutdown()
+
+
+def test_the_about_and_help_pages_are_there_and_point_at_each_other(world):
+    client = world['app'].test_client()
+    for path, heading in (('/about', 'Seed Bank'), ('/help', 'How to enter seeds, plants and lines')):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert heading in r.get_data(as_text=True)
+    assert '/help' in client.get('/about').get_data(as_text=True)
+    assert '/about' in client.get('/help').get_data(as_text=True)

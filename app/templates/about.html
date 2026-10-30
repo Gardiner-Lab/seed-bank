@@ -10,28 +10,130 @@
 <body class="tt">
 <header class="tt-bar">
     <a class="tt-home" href="{{ request.script_root }}/" title="All of Trellis Tools"><img src="{{ request.script_root }}/static/trellis/trellis.svg" alt=""><span>Trellis Tools</span></a>
-    <a class="tt-module" href="{{ request.script_root }}/"><img src="{{ request.script_root }}/static/trellis/seeds.svg" alt="">Seed Bank</a>
+    <a class="tt-module" href="{{ request.script_root }}/"><img src="{{ request.script_root }}/static/trellis/seeds.svg" alt="">Seed Bank</a><span class="tt-sub">About</span>
 </header>
-<main class="about">
+<main class="help">
     <h1>Seed Bank {{ version }}</h1>
-    <p>Trellis Tools' record of plant lines, the seed lots they are kept as and the plants grown
-       from them, with how each descends from the others.</p>
-    <ul>
-        <li><b>Lines</b>: wild types, mutants, transgenic events and crosses, with their parents and the
-            plasmids they carry (from the Plasmid Editor).</li>
-        <li><b>Seed lots</b>: where they are kept, how much is left, germination and zygosity, and
-            segregation tests on selection plates.</li>
-        <li><b>Plants</b>: sown from a lot and numbered; harvested into the next generation, crossed, or the
-            founder of a new line; phenotypes with photos, 3D scans and files.</li>
-        <li><b>Labels</b> with QR codes that open the record on a phone.</li>
-    </ul>
-    <p>A lab's stocks are shared within the lab, and seen (not changed) by the other labs of its chair group;
-    other labs do not see them. Chair groups are set by an administrator on the dashboard's Labs tab.</p>
-    <h2>Licence</h2>
-    <p>Free software under the GNU General Public License v3.0. It includes
-       <a href="https://threejs.org/" rel="noopener">three.js</a> for the 3D viewer and
-       <a href="https://github.com/kazuhikoarase/qrcode-generator" rel="noopener">qrcode-generator</a> for labels,
-       both under the MIT licence (see NOTICE).</p>
+    <p class="lead">The lab's plant lines, the bags of seed they are kept as, and the plants grown from them
+       &mdash; each remembering where it came from, so any bag can be traced back to the plasmid it started
+       from, and forward to everything grown since.
+       <a href="{{ request.script_root }}/help">How to use it →</a></p>
+
+    <nav class="help-toc">
+        <a href="#holds">What it holds</a>
+        <a href="#cycle">The cycle</a>
+        <a href="#codes">Codes</a>
+        <a href="#together">With the other tools</a>
+        <a href="#sees">Who sees what</a>
+        <a href="#kept">Where the data is kept</a>
+        <a href="#licence">Licence</a>
+    </nav>
+
+    <section id="holds">
+        <h2>What it holds</h2>
+        <div class="help-cards">
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/line.svg" alt=""> Lines <code>GL-L-0001</code></h3>
+                <p>A genetic identity: a wild type, a mutant, a transgenic event, a cross. With its parents, its
+                   background and the plasmids it carries. A line does not change from one generation to the
+                   next.</p>
+            </div>
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/seedlot.svg" alt=""> Seed lots <code>GL-S-0001</code></h3>
+                <p>One bag of seeds: one line, one generation, one source. Where it is kept, how much is left,
+                   its germination and zygosity, and segregation tests on selection plates.</p>
+            </div>
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/plant.svg" alt=""> Plants <code>GL-P-0001</code></h3>
+                <p>One plant sown from a lot and numbered, where and under what treatment it grew, and what
+                   became of it: harvested, crossed, or the founder of a new line.</p>
+            </div>
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/camera.svg" alt=""> Phenotypes</h3>
+                <p>What you saw, scored against named traits so it can be compared between plants, lines and
+                   treatments, with photos, 3D scans and files.</p>
+            </div>
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/history.svg" alt=""> Family trees</h3>
+                <p>Any record's whole descent, drawn across the suite: from the plasmid and its glycerol
+                   stocks, through every generation, to the plants growing now.</p>
+            </div>
+            <div class="help-card">
+                <h3><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/label.svg" alt=""> Labels</h3>
+                <p>Bag and pot labels with QR codes: a phone camera on one opens the record, which is how a pot
+                   in a greenhouse says what it is.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="cycle">
+        <h2>The cycle</h2>
+        <p>The three records connect in a cycle, and that cycle is the lineage:</p>
+        <div class="flow">
+            <span class="flow-box"><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/seedlot.svg" alt=""> seed lot</span><span class="flow-arrow">— sow →</span>
+            <span class="flow-box"><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/plant.svg" alt=""> plants</span><span class="flow-arrow">— harvest one →</span>
+            <span class="flow-box"><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/seedlot.svg" alt=""> next generation</span><span class="flow-arrow">— sow → …</span>
+        </div>
+        <p>Because every lot remembers the plant it came off, and every plant the lot it was sown from, nothing
+           has to be reconstructed later from memory. A cross joins two plants; founding a line starts a new
+           identity from one plant.</p>
+    </section>
+
+    <section id="codes">
+        <h2>Codes</h2>
+        <p>Every record has a code to write on a bag or a pot: the <b>lab's own code</b>, a letter for what it
+           is, then its number.</p>
+        <div class="flow">
+            <span class="flow-box">GL</span><span class="flow-arrow">the lab</span>
+            <span class="flow-box">S</span><span class="flow-arrow">L line · S seed lot · P plant</span>
+            <span class="flow-box">0042</span><span class="flow-arrow">its number in that lab</span>
+        </div>
+        <p>The lab's lead chooses the lab code before the lab's first record; after that it is fixed, no two
+           labs share one, and a code is never reused. Lab Stocks uses the same lab code, so
+           <code>GL-S-0001</code> (a seed lot) and <code>GL-G-0001</code> (a glycerol stock) belong to the same
+           lab.</p>
+    </section>
+
+    <section id="together">
+        <h2>With the other tools</h2>
+        <ul>
+            <li><b>Plasmid Editor</b> &mdash; the plasmids a line carries, with their maps and sequencing
+                reads.</li>
+            <li><b>Lab Stocks</b> &mdash; the glycerol stocks of those plasmids, and plant material taken from a
+                plant here.</li>
+            <li><b>Lab Notebook</b> &mdash; type <code>@</code> to link a line, lot or plant. The record then lists
+                the pages that mention it.</li>
+            <li><b>MoClo Library Tool</b> &mdash; where the plasmids were assembled.</li>
+        </ul>
+        <p>The family tree reaches across all of them, which is what makes "where did this line come from?" a
+           question with an answer.</p>
+    </section>
+
+    <section id="sees">
+        <h2>Who sees what</h2>
+        <ul>
+            <li><b>Your lab</b> sees and changes its own records.</li>
+            <li><b>The other labs of your chair group</b> see them, but cannot change them &mdash; which is how a
+                cross with a neighbouring lab's mutant is possible without handing over your records. Chair
+                groups are set by an administrator on the dashboard's Labs tab.</li>
+            <li><b>Other labs</b> see nothing of yours.</li>
+        </ul>
+        <p>Records that others descend from cannot be deleted, so a lineage never loses its middle.</p>
+    </section>
+
+    <section id="kept">
+        <h2>Where the data is kept</h2>
+        <p>On the lab's own server, in one database with the photos and 3D scans inside it, backed up each
+           night with the rest of the suite.</p>
+    </section>
+
+    <section id="licence">
+        <h2>Licence</h2>
+        <p>Free software under the GNU General Public License v3.0. It includes
+           <a href="https://threejs.org/" rel="noopener">three.js</a> for the 3D viewer and
+           <a href="https://github.com/kazuhikoarase/qrcode-generator" rel="noopener">qrcode-generator</a> for labels,
+           both under the MIT licence (see NOTICE).</p>
+    </section>
 </main>
 </body>
 </html>

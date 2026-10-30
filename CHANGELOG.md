@@ -5,6 +5,15 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **About** says much more: what each kind of record holds, the cycle that makes the lineage, how the codes
+  are built, how the tools fit together, who sees what, and where the data is kept. It and *How to enter
+  seeds, plants and lines* now link to each other.
+
+### Changed
+- The Help page is read without signing in, as About is: it explains the seed bank to someone who has no
+  account yet.
+
 ## [0.9.0] - 2026-10-30
 
 ### Changed
