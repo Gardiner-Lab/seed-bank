@@ -173,8 +173,11 @@ function localTime(stamp) {
   const d = new Date(String(stamp).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(stamp) ? '' : 'Z'));
   if (Number.isNaN(d.getTime())) return String(stamp).slice(0, 16);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/** A stored date (2026-10-30) as the lab writes it: 30-10-2026. Anything else as it is. */
+const euDate = (iso) => (/^\d{4}-\d\d-\d\d$/.test(String(iso || '')) ? String(iso).split('-').reverse().join('-') : (iso || ''));
 
 const today = () => new Date().toISOString().slice(0, 10);
 const ICON = { line: 'line', lot: 'seedlot', plant: 'plant' };     // glyphs
@@ -426,7 +429,7 @@ const App = {
       lots: (r) => [`${r.line}`, r.generation, r.from_plant || r.source || '—', r.location, r.amount,
         r.zygosity, r.germination !== null && r.germination !== undefined ? `${r.germination}%` : '', r.sown || ''],
       plants: (r) => [r.line, r.lot, `#${r.number}${r.selected ? ' ★' : ''}`, r.status, r.zygosity,
-        [r.place, r.location].filter(Boolean).join(' · '), r.treatment, r.sown_on || ''],
+        [r.place, r.location].filter(Boolean).join(' · '), r.treatment, euDate(r.sown_on)],
     }[view];
     return this.pickTable(head, rows.map((r) => r.code),
       el('tbody', {}, rows.map((r) => el('tr', {
@@ -684,7 +687,7 @@ const App = {
           }) }, '✎ Edit')]),
       this.ancestry(rec),
       this.facts([['Line', link(rec.line)], ['Generation', rec.generation], ['Harvested from', rec.from_plant ? link(rec.from_plant) : null],
-        ['Father', rec.father_plant ? link(rec.father_plant) : null], ['Source', rec.source], ['Harvested on', rec.harvested_on],
+        ['Father', rec.father_plant ? link(rec.father_plant) : null], ['Source', rec.source], ['Harvested on', euDate(rec.harvested_on)],
         ['Amount', rec.amount], ['Kept in', rec.location], ['Germination', rec.germination !== null ? `${rec.germination}%` : null],
         ['Zygosity', rec.zygosity], ['Made by', `${rec.created_by || '—'} · ${localTime(rec.created_at)}`]]),
       this.elabFact(rec),
@@ -693,7 +696,7 @@ const App = {
         rec.seg_tests.length ? el('table', { class: 'data' },
           el('thead', {}, el('tr', {}, ['Date', 'Selection', 'Resistant', 'Sensitive', '% R', 'Expected', 'χ²', 'p', 'Result', ''].map((h) => el('th', {}, h)))),
           el('tbody', {}, rec.seg_tests.map((t) => el('tr', { class: t.fits[t.expected].fits ? 'fit' : 'misfit' },
-            el('td', {}, t.tested_on || localTime(t.created_at).slice(0, 10)), el('td', {}, t.selection), el('td', {}, t.resistant),
+            el('td', {}, euDate(t.tested_on) || localTime(t.created_at).slice(0, 10)), el('td', {}, t.selection), el('td', {}, t.resistant),
             el('td', {}, t.sensitive), el('td', {}, t.share.split(' ')[0]), el('td', {}, t.expected),
             el('td', {}, t.fits[t.expected].chi2 ?? '—'), el('td', {}, t.fits[t.expected].p_text ?? '—'), el('td', { class: 'verdict' }, t.verdict),
             el('td', {}, el('button', { class: 'icon-btn', title: 'Remove this test', onclick: async () => {
@@ -711,7 +714,7 @@ const App = {
         rec.plants.length ? this.pickTable(['', 'Code', '#', 'Status', 'Zygosity', 'Sown', 'Where', 'Treatment', 'Harvested into'], rec.plants.map((p) => p.code),
           el('tbody', {}, rec.plants.map((p) => el('tr', { class: 'clickable', onclick: () => { location.hash = `plant=${p.code}`; } },
             el('td', { class: 'pick' }, this.pick(p.code)), el('td', { class: 'code' }, p.code), el('td', {}, `#${p.number}${p.selected ? ' ★' : ''}`),
-            el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, p.sown_on || ''),
+            el('td', {}, p.status), el('td', {}, p.zygosity), el('td', {}, euDate(p.sown_on)),
             el('td', {}, [p.place, p.location].filter(Boolean).join(' · ')), el('td', {}, p.treatment),
             el('td', {}, p.harvested.map((h, i) => [i ? ', ' : '', link(h)])))))) : el('p', { class: 'hint' }, 'None sown yet.')),
       this.phenotypeSummary(rec),
@@ -845,7 +848,7 @@ const App = {
             submit: async (v) => { await api('PUT', `/plants/${rec.code}`, v); this.reload(); },
           }) }, '✎ Edit')]),
       this.ancestry(rec),
-      this.facts([['Line', link(rec.line)], ['Sown from', link(rec.lot)], ['Number', `#${rec.number}`], ['Sown on', rec.sown_on],
+      this.facts([['Line', link(rec.line)], ['Sown from', link(rec.lot)], ['Number', `#${rec.number}`], ['Sown on', euDate(rec.sown_on)],
         ['Age', daysSince(rec.sown_on) !== null && rec.status === 'growing' ? `day ${daysSince(rec.sown_on)}` : null],
         ['Grows in', rec.place ? [rec.place.name, el('span', { class: 'hint' }, ` ${rec.place.kind}${rec.place.conditions ? `, ${rec.place.conditions}` : ''}`)] : null],
         ['Position', rec.location], ['Treatment', rec.treatment], ['Status', rec.status], ['Zygosity', rec.zygosity], ['Selected', rec.selected ? '★ a keeper' : null],
@@ -1012,7 +1015,7 @@ const App = {
               el('td', {}, el('a', { href: `#line=${b.line_code}`, onclick: (e) => e.stopPropagation() }, b.line), this.labTag(b.lab)),
               el('td', {}, el('a', { href: `#lot=${b.lot}`, onclick: (e) => e.stopPropagation() }, b.lot), el('span', { class: 'hint' }, ` ${b.generation || ''}`)),
               el('td', {}, `${b.plants.length} (#${Math.min(...nums)}${nums.length > 1 ? `–#${Math.max(...nums)}` : ''})`),
-              el('td', {}, b.sown_on || '—'),
+              el('td', {}, euDate(b.sown_on) || '—'),
               el('td', {}, daysSince(b.sown_on) !== null ? `day ${daysSince(b.sown_on)}` : '—'),
               el('td', {}, b.treatment || el('span', { class: 'hint' }, '—')),
               el('td', {}, b.location)),
@@ -1250,7 +1253,7 @@ const App = {
       rec.observations.length ? el('div', { class: 'observations' }, rec.observations.map((o) => el('div', { class: 'observation' },
         el('div', { class: 'obs-head' }, el('b', {}, o.trait), o.value ? `: ${o.value}` : '',
           o.unit && o.number !== null && !String(o.value).endsWith(o.unit) ? ` ${o.unit}` : '',
-          el('span', { class: 'hint' }, ` · ${o.observed_on || localTime(o.created_at).slice(0, 10)} · ${o.created_by || ''}`),
+          el('span', { class: 'hint' }, ` · ${euDate(o.observed_on) || localTime(o.created_at).slice(0, 10)} · ${o.created_by || ''}`),
           el('button', { class: 'icon-btn', title: 'Remove', onclick: async () => { await api('DELETE', `/observations/${o.id}`); this.reload(); } }, '✕')),
         o.notes ? el('div', {}, o.notes) : null,
         this.files('observation', o.id, o.attachments, null)))) : el('p', { class: 'hint' }, 'Nothing recorded yet.'));

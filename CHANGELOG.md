@@ -5,6 +5,11 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Dates are written day-first, as in Europe: 30-10-2026, and 30-10-2026 16:40 on the 24-hour clock: when a seed
+  lot was harvested, a plant sown, a test done or a trait scored, who made or changed a record when, and on
+  labels. Stored dates, and the observations' CSV, stay as they were (2026-10-30).
+
 ## [0.8.0] - 2026-10-26
 
 ### Added

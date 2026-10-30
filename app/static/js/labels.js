@@ -8,6 +8,8 @@ const SB = window.SB;
 const KIND = { L: 'line', S: 'lot', P: 'plant' };
 // GL-S-0001 (or S-0001): the letter before the number says what it is.
 const kindOf = (code) => KIND[code.split('-').slice(-2, -1)[0]];
+// A stored date (2026-10-30) as the lab writes it: 30-10-2026.
+const euDate = (iso) => (/^\d{4}-\d\d-\d\d$/.test(String(iso || '')) ? String(iso).split('-').reverse().join('-') : (iso || ''));
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -40,8 +42,8 @@ function content(rec) {
     ? [rec.name, [rec.line_kind, rec.species].filter(Boolean).join(' · '), rec.plasmids?.map((p) => p.name).join(', ')]
     : rec.kind === 'lot'
       ? [`${rec.line?.name || ''} ${rec.generation || ''}`, rec.from_plant ? `from ${rec.from_plant.code}` : rec.source,
-        [rec.harvested_on, rec.location].filter(Boolean).join(' · ')]
-      : [`${rec.line?.name || ''} #${rec.number}`, `${rec.lot?.code || ''} ${rec.lot?.generation || ''}`, rec.sown_on ? `sown ${rec.sown_on}` : rec.location];
+        [euDate(rec.harvested_on), rec.location].filter(Boolean).join(' · ')]
+      : [`${rec.line?.name || ''} #${rec.number}`, `${rec.lot?.code || ''} ${rec.lot?.generation || ''}`, rec.sown_on ? `sown ${euDate(rec.sown_on)}` : rec.location];
   return { code: rec.code, lines: lines.filter(Boolean), url: target, kind: rec.kind };
 }
 
