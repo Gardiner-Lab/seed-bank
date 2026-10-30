@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-30
+
 ### Added
 - **About** says much more: what each kind of record holds, the cycle that makes the lineage, how the codes
   are built, how the tools fit together, who sees what, and where the data is kept. It and *How to enter
