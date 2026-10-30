@@ -26,9 +26,9 @@
     <nav class="tt-links">
         <a href="{{ links.notebook }}/" target="_blank" rel="noopener">Notebook ↗</a>
         <a href="{{ links.editor }}/editor" target="_blank" rel="noopener">Plasmid Editor ↗</a>
+        <a class="tt-help" href="{{ request.script_root }}/help" title="How to enter seeds, plants and lines">Help</a>
         <a href="{{ request.script_root }}/about">About</a>
     </nav>
-    <a class="tt-help" href="{{ request.script_root }}/help" title="How to enter seeds, plants and lines">Help</a>
     <span class="tt-user">{{ person.username }}{% if person.lab %} · {{ person.lab }}{% endif %}{% if person.role == 'admin' %} · admin{% endif %}</span>
     <a class="tt-logout" href="{{ links.logout }}">Log out</a>
 </header>
