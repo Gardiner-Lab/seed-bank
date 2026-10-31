@@ -11,7 +11,9 @@ and the project uses [semantic versioning](https://semver.org/).
 - An individual plant can be marked **dead** or **discarded**, not only a whole sowing. Opening a row on the
   Growing page now gives each of its plants a tick of its own, so one dead seedling can be marked without its
   neighbours; the row's own tick still takes all of them, and shows when only some are chosen. A plant's own
-  page gains a **Mark as…** button, rather than the status being buried in ✎ Edit.
+  page gains a **Mark as…** button, rather than the status being buried in ✎ Edit. On the **Plants** list,
+  ticking any number of plants and pressing **Mark as…** marks them all; another lab's are left out of the
+  count, as they cannot be changed.
 
 ## [0.10.0] - 2026-10-30
 

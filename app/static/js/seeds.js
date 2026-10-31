@@ -262,22 +262,42 @@ const App = {
         plants: 'Search plants by code, line, lot, place, position, treatment or status' }[view] });
     const table = el('div', { class: 'list' });
     const labelBtn = el('button', { class: 'btn btn-secondary', onclick: () => this.openLabels([...this.selected]) }, glyph('label'), ' Labels for selected');
+    // The plants ticked here, of this lab: another lab's are shown but not changed.
+    let shown = [];
+    const chosenPlants = () => shown.filter((p) => this.selected.has(p.code) && p.mine !== false);
+    const markBtn = view === 'plants'
+      ? el('button', { class: 'btn btn-secondary', title: 'Mark the plants ticked as dead, discarded or harvested',
+        onclick: () => {
+          const plants = chosenPlants();
+          if (!plants.length) { toast('Tick the plants to mark', 'error'); return; }
+          this.markPlants(plants, () => { this.selected.clear(); draw(); });
+        } }, 'Mark as…')
+      : null;
     const draw = async () => {
       this[`q_${view}`] = query.value;
       const data = await api('GET', `/${view}?q=${encodeURIComponent(query.value)}`);
+      shown = data[view];
       put(table, this.listTable(view, data[view]));
-      labelBtn.disabled = !this.selected.size;
+      this.onSelection();
     };
     let timer;
     query.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(draw, 250); });
-    this.onSelection = () => { labelBtn.disabled = !this.selected.size; labelBtn.replaceChildren(glyph('label'), ` Labels for selected${this.selected.size ? ` (${this.selected.size})` : ''}`); };
+    this.onSelection = () => {
+      labelBtn.disabled = !this.selected.size;
+      labelBtn.replaceChildren(glyph('label'), ` Labels for selected${this.selected.size ? ` (${this.selected.size})` : ''}`);
+      if (markBtn) {
+        const n = chosenPlants().length;
+        markBtn.disabled = !n;
+        markBtn.textContent = `Mark as…${n ? ` (${n})` : ''}`;
+      }
+    };
     put(main,
       el('div', { class: 'page-head' },
         el('h1', {}, glyph({ lines: 'line', lots: 'seedlot', plants: 'plant' }[view]), ' ', { lines: 'Lines', lots: 'Seed lots', plants: 'Plants' }[view]),
         el('span', { class: 'actions' },
           view === 'lines' ? el('button', { class: 'btn btn-primary', onclick: () => this.editLine() }, '＋ New line') : null,
           view === 'lots' ? el('button', { class: 'btn btn-primary', onclick: () => this.newLot() }, '＋ Seed lot') : null,
-          labelBtn)),
+          markBtn, labelBtn)),
       this.labCodeLine(),
       this.elabLine(),
       el('p', { class: 'hint' }, {

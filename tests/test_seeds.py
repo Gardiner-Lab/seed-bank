@@ -465,3 +465,14 @@ def test_the_about_and_help_pages_are_there_and_point_at_each_other(world):
         assert heading in r.get_data(as_text=True)
     assert '/help' in client.get('/about').get_data(as_text=True)
     assert '/about' in client.get('/help').get_data(as_text=True)
+
+
+def test_plants_in_the_list_say_whose_they_are(as_user):
+    ana = as_user('ana')
+    line = _line(ana, 'Col-0')
+    lot = _ok(ana.post('/api/lots', json={'line': line['code'], 'source': 'NASC'}), 201)['record']
+    _ok(ana.post(f"/api/lots/{lot['code']}/sow", json={'count': 2}), 201)
+    plants = _ok(ana.get('/api/plants'))['plants']
+    assert plants and all(p['mine'] is True for p in plants), 'your own lab’s plants are yours to change'
+    # Someone outside the lab does not see them at all.
+    assert _ok(as_user('zoe').get('/api/plants'))['plants'] == []

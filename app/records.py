@@ -769,7 +769,9 @@ def list_plants(person: Person, q: str = '', limit: int = 500) -> List[dict]:
                  'line_code': r['line_code'], 'lot': r['lot_code'], 'generation': r['generation'],
                  'status': r['status'], 'zygosity': r['zygosity'], 'selected': bool(r['selected']),
                  'location': r['location'], 'place': r['place'] or '', 'treatment': r['treatment'],
-                 'sown_on': r['sown_on'], 'lab': r['lab']}
+                 'sown_on': r['sown_on'], 'lab': r['lab'],
+                 # Whose it is, as the growing list gives it: another lab's is shown but not changed.
+                 'mine': can_change(person, r)}
                 for r in rows if can_see(person, r)][:limit]
 
 
