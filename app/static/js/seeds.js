@@ -835,6 +835,8 @@ const App = {
           el('button', { class: 'btn btn-secondary', onclick: () => this.cross(rec) }, '✕ Cross with…'),
           el('button', { class: 'btn btn-secondary', title: 'Make this plant the founder of a line of its own, e.g. an independent T1 transformant',
             onclick: () => this.foundLine(rec) }, glyph('line'), ' Found a line…'),
+          rec.mine ? el('button', { class: 'btn btn-secondary', title: 'It died, or was thrown away: it leaves the Growing page',
+            onclick: () => this.markPlants([rec], () => this.reload()) }, 'Mark as…') : null,
           el('button', { class: 'btn btn-secondary', onclick: async () => formModal({
             title: `Edit ${rec.code}`,
             fields: [{ name: 'status', label: 'Status', type: 'select', options: this.meta.plant_status, value: rec.status },
@@ -954,12 +956,17 @@ const App = {
       if (!batches.has(key)) batches.set(key, { ...p, key, place: p.place || '', plants: [] });
       batches.get(key).plants.push(p);
     }
+    // What is chosen is plants, by code: a whole sowing is every plant of its row, and a row can be
+    // opened to pick plants within it one by one.
     const chosen = this.growChosen || (this.growChosen = new Set());
     const query = el('input', { type: 'search', class: 'list-search', value: this.q_growing || '',
       placeholder: 'Filter by line, seed lot, treatment or position' });
     const body = el('div', {});
     const count = el('span', { class: 'hint' });
-    const plantsChosen = () => [...batches.values()].filter((b) => chosen.has(b.key)).flatMap((b) => b.plants);
+    const plantsChosen = () => [...batches.values()].flatMap((b) => b.plants).filter((p) => chosen.has(p.code));
+    const pickable = (b) => (b.mine ? b.plants : []);
+    const setPicked = (plants, on) => { for (const p of plants) { if (on) chosen.add(p.code); else chosen.delete(p.code); } };
+    const countPicked = (plants) => plants.filter((p) => chosen.has(p.code)).length;
     const act = (label, title, handler, primary = false) => el('button', { class: `btn ${primary ? 'btn-primary' : 'btn-secondary'} needs-choice`,
       title, onclick: () => { const plants = plantsChosen(); if (plants.length) handler(plants); } }, label);
     const actions = el('div', { class: 'grow-actions' },
@@ -970,17 +977,12 @@ const App = {
         fields: [{ name: 'treatment', label: 'Treatment', list: 'treatments', value: plants[0].treatment }],
         submit: async (v) => { await api('POST', '/plants/change', { plants: plants.map((p) => p.code), ...v }); this.showGrowing(); },
       })),
-      act('Mark as…', 'Discarded, dead, or harvested', (plants) => formModal({
-        title: `Mark ${plants.length} plant${plants.length > 1 ? 's' : ''}`,
-        intro: 'They leave this page. To keep a plant\'s seeds as a seed lot, use Harvest on the plant itself instead.',
-        fields: [{ name: 'status', label: 'Now', type: 'select', options: this.meta.plant_status.filter((s) => s !== 'growing'), value: 'discarded' }],
-        submit: async (v) => { await api('POST', '/plants/change', { plants: plants.map((p) => p.code), ...v }); this.showGrowing(); },
-      })),
+      act('Mark as…', 'Discarded, dead, or harvested', (plants) => this.markPlants(plants, () => this.showGrowing())),
       act([glyph('label'), ' Labels'], 'Labels for the plants chosen', (plants) => this.openLabels(plants.map((p) => p.code))),
       count);
     const sync = () => {
       const n = plantsChosen().length;
-      count.textContent = n ? `${n} plant${n > 1 ? 's' : ''} chosen` : 'Tick rows to act on their plants';
+      count.textContent = n ? `${n} plant${n > 1 ? 's' : ''} chosen` : 'Tick a row for its plants, or open it to pick them one by one';
       for (const b of actions.querySelectorAll('.needs-choice')) b.disabled = !n;
     };
     const draw = () => {
@@ -992,12 +994,12 @@ const App = {
       for (const b of shown) (groups.get(b.place) || groups.get('')).push(b);
       const sections = [...groups.entries()].filter(([, list]) => list.length).map(([id, list]) => {
         const place = placeOf[id];
-        const keys = list.filter((b) => b.mine).map((b) => b.key);
-        const all = el('input', { type: 'checkbox', title: 'Choose every row here', 'aria-label': 'Choose every row here',
-          onchange: (e) => { for (const k of keys) { if (e.target.checked) chosen.add(k); else chosen.delete(k); } draw(); } });
-        const n = keys.filter((k) => chosen.has(k)).length;
-        all.checked = n > 0 && n === keys.length; all.indeterminate = n > 0 && n < keys.length;
-        all.disabled = !keys.length;
+        const here = list.flatMap(pickable);
+        const all = el('input', { type: 'checkbox', title: 'Choose every plant here', 'aria-label': 'Choose every plant here',
+          onchange: (e) => { setPicked(here, e.target.checked); draw(); } });
+        const n = countPicked(here);
+        all.checked = n > 0 && n === here.length; all.indeterminate = n > 0 && n < here.length;
+        all.disabled = !here.length;
         return el('section', { class: 'place-card' },
           el('div', { class: 'place-head' }, el('h2', {}, place ? place.name : 'No place recorded'),
             place ? el('span', { class: 'chip' }, place.kind) : null, place ? this.labTag(place.lab) : null,
@@ -1008,19 +1010,32 @@ const App = {
             el('tbody', {}, list.map((b) => {
               const open = this.growOpen?.has(b.key);
               const nums = b.plants.map((p) => p.number);
-              return [el('tr', { class: `clickable ${chosen.has(b.key) ? 'chosen' : ''}`, title: 'Show its plants',
+              const mine = pickable(b);
+              const picked = countPicked(mine);
+              const box = el('input', { type: 'checkbox', title: 'Choose every plant of this sowing',
+                checked: picked > 0 && picked === mine.length, onclick: (e) => e.stopPropagation(),
+                onchange: (e) => { setPicked(mine, e.target.checked); draw(); } });
+              box.indeterminate = picked > 0 && picked < mine.length;
+              return [el('tr', { class: `clickable ${picked ? 'chosen' : ''}`, title: 'Show its plants',
                 onclick: () => { this.growOpen = this.growOpen || new Set(); if (open) this.growOpen.delete(b.key); else this.growOpen.add(b.key); draw(); } },
-              el('td', { class: 'pick' }, b.mine ? el('input', { type: 'checkbox', checked: chosen.has(b.key), onclick: (e) => e.stopPropagation(),
-                onchange: (e) => { if (e.target.checked) chosen.add(b.key); else chosen.delete(b.key); draw(); } }) : null),
+              el('td', { class: 'pick' }, b.mine ? box : null),
               el('td', {}, el('a', { href: `#line=${b.line_code}`, onclick: (e) => e.stopPropagation() }, b.line), this.labTag(b.lab)),
               el('td', {}, el('a', { href: `#lot=${b.lot}`, onclick: (e) => e.stopPropagation() }, b.lot), el('span', { class: 'hint' }, ` ${b.generation || ''}`)),
-              el('td', {}, `${b.plants.length} (#${Math.min(...nums)}${nums.length > 1 ? `–#${Math.max(...nums)}` : ''})`),
+              el('td', {}, `${b.plants.length} (#${Math.min(...nums)}${nums.length > 1 ? `–#${Math.max(...nums)}` : ''})`,
+                picked && picked < mine.length ? el('span', { class: 'hint' }, ` · ${picked} chosen`) : null),
               el('td', {}, euDate(b.sown_on) || '—'),
               el('td', {}, daysSince(b.sown_on) !== null ? `day ${daysSince(b.sown_on)}` : '—'),
               el('td', {}, b.treatment || el('span', { class: 'hint' }, '—')),
               el('td', {}, b.location)),
+              // Opened: every plant of the sowing, each one choosable on its own, so a single dead
+              // seedling can be marked without its neighbours.
               open ? el('tr', { class: 'batch-plants' }, el('td', {}), el('td', { colspan: 7 }, el('div', { class: 'chips' },
-                b.plants.map((p) => el('a', { class: 'chip', href: `#plant=${p.code}` }, `#${p.number}${p.selected ? ' ★' : ''}`))))) : null];
+                b.plants.map((p) => (b.mine
+                  ? el('label', { class: `chip chip-pick ${chosen.has(p.code) ? 'chosen' : ''}`, title: `Choose plant #${p.number}` },
+                    el('input', { type: 'checkbox', checked: chosen.has(p.code),
+                      onchange: (e) => { setPicked([p], e.target.checked); draw(); } }),
+                    el('a', { href: `#plant=${p.code}`, onclick: (e) => e.stopPropagation() }, `#${p.number}${p.selected ? ' ★' : ''}`))
+                  : el('a', { class: 'chip', href: `#plant=${p.code}` }, `#${p.number}${p.selected ? ' ★' : ''}`)))))) : null];
             }))));
       });
       put(body, sections.length ? sections : el('div', { class: 'empty' },
@@ -1034,9 +1049,22 @@ const App = {
       el('div', { class: 'page-head' }, el('h1', {}, glyph('plant'), ' Growing'),
         el('span', { class: 'actions' }, el('button', { class: 'btn btn-secondary', onclick: () => this.managePlaces() }, glyph('lab'), ' Places…'))),
       el('p', { class: 'hint' }, 'Every plant still growing, by where it grows; plants sown together are one row (open it for its plants). ',
-        'Tick rows to score, move, treat or mark their plants together.'),
+        'Tick a row to act on all its plants, or open it and tick just the ones you mean.'),
       actions, query, body);
     draw();
+  },
+
+  /** A plant, or several, marked dead, discarded or harvested: they leave the Growing page. */
+  markPlants(plants, done) {
+    const one = plants.length === 1;
+    formModal({
+      title: one ? `Mark ${plants[0].code}` : `Mark ${plants.length} plants`,
+      intro: `${one ? 'It leaves' : 'They leave'} the Growing page. To keep a plant's seeds as a seed lot, `
+        + 'use Harvest on the plant itself instead.',
+      fields: [{ name: 'status', label: 'Now', type: 'select',
+        options: this.meta.plant_status.filter((s) => s !== 'growing'), value: 'discarded' }],
+      submit: async (v) => { await api('POST', '/plants/change', { plants: plants.map((p) => p.code), ...v }); done(); },
+    });
   },
 
   movePlants(plants) {

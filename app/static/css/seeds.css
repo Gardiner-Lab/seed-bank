@@ -210,3 +210,9 @@ li.tree-focus > a.rec-link { background: var(--tt-green-soft); border-radius: .3
 .not-mine { margin: .4rem 0 0; padding: .35rem .6rem; border-radius: .4rem; background: var(--tt-brown-soft);
   color: var(--tt-brown); font-size: .85rem; display: inline-block; }
 #main.readonly button:not([data-keep]), #main.readonly label.btn:not([data-keep]) { display: none !important; }
+
+/* A plant chosen on its own, inside an opened sowing on the Growing page. */
+.chip-pick { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; }
+.chip-pick input { margin: 0; cursor: pointer; }
+.chip-pick a { text-decoration: none; color: inherit; }
+.chip-pick.chosen { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }

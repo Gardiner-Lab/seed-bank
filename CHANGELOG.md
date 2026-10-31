@@ -5,6 +5,14 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-31
+
+### Added
+- An individual plant can be marked **dead** or **discarded**, not only a whole sowing. Opening a row on the
+  Growing page now gives each of its plants a tick of its own, so one dead seedling can be marked without its
+  neighbours; the row's own tick still takes all of them, and shows when only some are chosen. A plant's own
+  page gains a **Mark as…** button, rather than the status being buried in ✎ Edit.
+
 ## [0.10.0] - 2026-10-30
 
 ### Added
