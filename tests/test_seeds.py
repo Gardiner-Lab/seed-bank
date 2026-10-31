@@ -476,3 +476,17 @@ def test_plants_in_the_list_say_whose_they_are(as_user):
     assert plants and all(p['mine'] is True for p in plants), 'your own lab’s plants are yours to change'
     # Someone outside the lab does not see them at all.
     assert _ok(as_user('zoe').get('/api/plants'))['plants'] == []
+
+
+def test_every_page_reaches_the_suite_and_its_other_tools():
+    """
+    The bar's "Trellis Tools" link must point at the suite, not back at this tool (it once did, which also
+    stopped the tool switcher loading, since it looks for the suite beside that link).
+    """
+    from pathlib import Path
+    for page in sorted(Path('app/templates').glob('*.html')):
+        html = page.read_text()
+        if 'class="tt-bar"' not in html:
+            continue
+        assert 'class="tt-home" href="{{ links.suite_home }}"' in html, f'{page.name}: home link is not the suite'
+        assert 'trellis/modules.js' in html, f'{page.name}: the other tools are not linked'

@@ -9,7 +9,7 @@
 </head>
 <body class="tt labels-page">
 <header class="tt-bar no-print">
-    <a class="tt-home" href="{{ request.script_root }}/" title="All of Trellis Tools"><img src="{{ request.script_root }}/static/trellis/trellis.svg" alt=""><span>Trellis Tools</span></a>
+    <a class="tt-home" href="{{ links.suite_home }}" title="All of Trellis Tools"><img src="{{ request.script_root }}/static/trellis/trellis.svg" alt=""><span>Trellis Tools</span></a>
     <a class="tt-module" href="{{ request.script_root }}/"><img src="{{ request.script_root }}/static/trellis/seeds.svg" alt="">Seed Bank</a><span class="tt-sub">Labels</span>
     <span class="dymo-export" title="Files for DYMO Connect (the LabelWriter 550's software), on LabTAG labels">
         <label class="hint">Label <select id="dymoStock"></select></label>
@@ -33,5 +33,6 @@
 <script src="{{ request.script_root }}/static/vendor/qrcode.js?v={{ version }}"></script>
 <script src="{{ request.script_root }}/static/js/dymo.js?v={{ version }}"></script>
 <script src="{{ request.script_root }}/static/js/labels.js?v={{ version }}"></script>
+<script src="{{ request.script_root }}/static/trellis/modules.js?v={{ version }}" defer></script>
 </body>
 </html>
