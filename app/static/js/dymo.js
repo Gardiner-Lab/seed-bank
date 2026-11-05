@@ -73,17 +73,24 @@ const DYMO_STOCKS = [
 // LabTAG's LabelWriter 550 labels (LWCS). LabTAG publishes no template files for them: DYMO Connect
 // has its own, and recognises the roll in the printer. Each is laid out as the DY4 label of the same
 // size; with an LWCS roll in the 550, DYMO Connect may ask to use the loaded label - say yes.
+// A roll label is printed as itself: the page is the label, not a sheet it is cut on, and
+// the stickers are placed from its own corner. The DY4 entry an LWCS label copies gives the
+// layout of its stickers; what it must not bring with it is the DYMO stock its sheet is cut
+// on. LWCS-506's DY4 label sits on a 56 x 94 mm shipping label, which is not what is in the
+// printer, and naming it sent DYMO Connect to that template.
 const DYMO_LWCS = [
   ['LWCS-501', '50.8 × 25.4 mm (2 × 1 in)', 'DY4-010'],
   ['LWCS-502', '50.8 × 6.4 mm (2 × 0.25 in)', 'DY4-075'],
   ['LWCS-504', '25.4 × 25.4 mm (1 × 1 in)', 'DY4-070'],
   ['LWCS-505', '25.4 × 12.7 mm (1 × 0.5 in)', 'DY4-040'],
   ['LWCS-506', '23.9 × 12.7 mm + 9.5 mm cap, SnapPeel', 'DY4-076'],
-].map(([id, size, like]) => ({ ...DYMO_STOCKS.find((s) => s.id === like), id, range: 'lwcs', size, products: id, like }));
+].map(([id, size, like]) => ({
+  ...DYMO_STOCKS.find((s) => s.id === like), id, range: 'lwcs', roll: true, size, products: id, like, names: {},
+}));
 
 const Dymo = {
   stocks: [...DYMO_LWCS, ...DYMO_STOCKS],
-  RANGES: { lwcs: 'LabTAG LWCS · LabelWriter 550', dy4: 'LabTAG DY4 · LabelWriter 450 series' },
+  RANGES: { own: 'The lab\'s own labels', lwcs: 'LabTAG LWCS · LabelWriter 550', dy4: 'LabTAG DY4 · LabelWriter 450 series' },
   MIN_QR: 0.3,               // inches: a QR code smaller than this does not scan reliably
   GAP: 0.04,
   MIN_PT: 5.5,               // points: smaller printed text is hard to read
@@ -108,6 +115,44 @@ const Dymo = {
   },
 
   stock(id) { return this.stocks.find((s) => s.id === id) || this.stocks[0]; },
+
+  /**
+   * The labels the lab has measured itself (the suite's label_stocks, in millimetres), put in
+   * front of LabTAG's. Each is a roll: one sticker, the tag with its spot or cap beside it across
+   * the gap, laid out as the DY4 cap labels are. A label with a DYMO name recorded asks DYMO
+   * Connect for that stock; without one the file names none and the roll in the printer is used.
+   * Replaces whatever was there before, so the page can call it again after a change.
+   */
+  own(rows) {
+    const inch = (mm) => Math.round((Number(mm) / 25.4) * 10000) / 10000;
+    const m = 0.04;                                   // a margin, as paper() leaves around a roll
+    const made = (rows || []).map((row) => {
+      const w = inch(row.tag_w);
+      const h = inch(row.tag_h);
+      const spot = inch(row.spot || 0);
+      const gap = inch(row.gap || 0);
+      const slot = { main: R(m, m, w, h) };
+      // The spot sits to the right of the tag, centred on it, as on LabTAG's cap labels.
+      if (spot > 0) slot.cap = R(m + w + gap, m + Math.max((h - spot) / 2, 0), spot, Math.min(spot, h));
+      const size = `${Number(row.tag_w)} × ${Number(row.tag_h)} mm`
+        + (spot > 0 ? ` + ${Number(row.spot)} mm spot` : '');
+      return {
+        id: row.id,
+        range: 'own',
+        roll: true,
+        products: row.name,
+        shown: `${row.name} · ${size}`,       // the picker and the file names: an id here is a uuid
+        size,
+        name: row.name,
+        names: row.dymo_label ? { NA: row.dymo_label, EU: row.dymo_label } : {},
+        orientation: row.orientation || 'Landscape',
+        rect: R(0, 0, m * 2 + w + (spot > 0 ? gap + spot : 0), m * 2 + h),
+        slots: [slot],
+      };
+    });
+    this.stocks = [...made, ...DYMO_LWCS, ...DYMO_STOCKS];
+    return made;
+  },
 
   esc: (s) => String(s ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])),
   num: (n) => String(Math.round(n * 10000) / 10000),
@@ -160,10 +205,32 @@ const Dymo = {
   },
 
   /**
+   * A box of text split into a band for each line, so every line is an object of its own. One object
+   * holding several lines would need line breaks inside a cell of the import spreadsheet, and DYMO
+   * Connect's Import data reads a line break as the end of the row, whatever the quotes around it.
+   * The bands run the way the lines do: down the box, or, where the text is turned 90°, across it
+   * from the far side, since that is where the turn puts the first line.
+   */
+  bands(box, count) {
+    return Array.from({ length: count }, (_, i) => (box.r === 90
+      ? { ...box, x: box.x + ((count - 1 - i) * box.w) / count, w: box.w / count }
+      : { ...box, y: box.y + (i * box.h) / count, h: box.h / count }));
+  },
+
+  /** What a sticker's line of text is called in the design and in the spreadsheet: Text1, Text1b, Text1c... */
+  lineName: (n, i) => `Text${n}${i ? String.fromCharCode(97 + i) : ''}`,
+
+  /** A box of text as one object for each of its lines, the first one bold as the code always is. */
+  lineObjects(box, lines, n) {
+    const boxes = this.bands(box, lines.length);
+    return lines.map((line, i) => ({ kind: 'text', name: this.lineName(n, i), box: boxes[i], lines: [line], bold: i === 0 }));
+  },
+
+  /**
    * One sticker's layout: in its main part a QR code at one end, where it fits, and the code and
    * lines along the rest; in its cap (or strip) the short code. As [{kind: 'qr'|'text', name, box,
    * value | lines, size}], drawn as DYMO objects (sticker) or as a picture (svg). `n` numbers the
-   * objects, so a design names its fields Text1, QR1, Cap1, Text2...
+   * objects, so a design names its fields Text1, Text1b, QR1, Cap1, Text2...
    */
   objects(slot, label, n, options = {}) {
     const out = [];
@@ -181,7 +248,7 @@ const Dymo = {
           : { x: m.x + side + this.GAP, y: m.y, w: m.w - side - this.GAP, h: m.h, r: 0 };
         const along = m.r === 90 ? rest.h : rest.w;
         out.push({ kind: 'qr', name: `QR${n}`, box: q, value: label.url },
-          { kind: 'text', name: `Text${n}`, box: rest, lines: this.fitLines(lines, along, across) });
+          ...this.lineObjects(rest, this.fitLines(lines, along, across), n));
       } else {
         const along = m.r === 90 ? m.h : m.w;
         // A strip too thin for two lines: one, the code with its first line beside it while that stays legible.
@@ -189,7 +256,7 @@ const Dymo = {
         const shown = across < 0.25
           ? [this.pointSize([beside], along, across) >= this.MIN_PT ? beside : label.code]
           : this.fitLines(lines, along, across);
-        out.push({ kind: 'text', name: `Text${n}`, box: m, lines: shown });
+        out.push(...this.lineObjects(m, shown, n));
       }
     }
     if (slot.cap) out.push({ kind: 'text', name: `Cap${n}`, box: slot.cap, lines: [this.shortCode(label.code)], size: 6 });
@@ -199,7 +266,8 @@ const Dymo = {
   /** One sticker as DYMO objects. */
   sticker(slot, label, n, options = {}) {
     return this.objects(slot, label, n, options).map((o) => (o.kind === 'qr'
-      ? this.qr(o.name, o.box, o.value) : this.text(o.name, o.box, o.lines, o.size ? { size: o.size } : {}))).join('');
+      ? this.qr(o.name, o.box, o.value)
+      : this.text(o.name, o.box, o.lines, { ...(o.size ? { size: o.size } : {}), ...(o.bold === false ? { bold: false } : {}) }))).join('');
   },
 
   /**
@@ -209,7 +277,7 @@ const Dymo = {
    * so a page printed to the 550 is the size of the label in it.
    */
   paper(stock) {
-    if (stock.range !== 'lwcs') return { x: 0, y: 0, w: stock.rect.x * 2 + stock.rect.w, h: stock.rect.y * 2 + stock.rect.h };
+    if (!stock.roll) return { x: 0, y: 0, w: stock.rect.x * 2 + stock.rect.w, h: stock.rect.y * 2 + stock.rect.h };
     const parts = stock.slots.flatMap((slot) => [slot.main, slot.cap].filter(Boolean));
     const m = 0.04;
     const x = Math.min(...parts.map((p) => p.x)) - m;
@@ -262,7 +330,7 @@ const Dymo = {
         const cy = b.y + b.h / 2;
         const top = -((o.lines.length - 1) * size * 1.2) / 2;
         const spans = o.lines.map((line, k) => `<text x="0" y="${n(top + k * size * 1.2)}" font-size="${n(size)}"`
-          + `${k === 0 ? ' font-weight="700"' : ''} text-anchor="middle" dominant-baseline="central">${this.esc(line)}</text>`).join('');
+          + `${k === 0 && o.bold !== false ? ' font-weight="700"' : ''} text-anchor="middle" dominant-baseline="central">${this.esc(line)}</text>`).join('');
         parts.push(`<g transform="translate(${n(cx)} ${n(cy)})${b.r === 90 ? ' rotate(90)' : ''}">${spans}</g>`);
       }
     });
@@ -272,12 +340,18 @@ const Dymo = {
 
   /** A .dymo file (DYMO Connect's own format): one printed label holding these stickers. */
   file(stock, region, labels, options) {
-    const name = stock.names[region] || stock.names.NA || Object.values(stock.names)[0];
+    // The DYMO stock this label is cut on, where there is one. A roll label has none unless
+    // somebody has recorded what DYMO Connect calls it: naming the wrong stock is what sends
+    // it to the wrong template, so the file says nothing and DYMO uses the roll in the printer.
+    const name = stock.names[region] || stock.names.NA || Object.values(stock.names)[0] || '';
     const objects = stock.slots.map((slot, i) => (labels[i] ? this.sticker(slot, labels[i], i + 1, options) : '')).join('');
-    const r = stock.rect;
+    // A sheet label's printable area, with the margins the template leaves around it; a roll
+    // label is its own page, so the box is the label itself, as paper() measures it.
+    const r = stock.roll ? this.paper(stock) : stock.rect;
     return '﻿<?xml version="1.0" encoding="utf-8"?>\n<DesktopLabel Version="1"><DYMOLabel Version="3">'
       + `<Description>${this.esc(`${stock.id}: ${labels.map((l) => l.code).join(', ')}`)}</Description>`
-      + `<Orientation>${stock.orientation}</Orientation><LabelName>${this.esc(name)}</LabelName><InitialLength>0</InitialLength>`
+      + `<Orientation>${stock.orientation}</Orientation>${name ? `<LabelName>${this.esc(name)}</LabelName>` : ''}`
+      + '<InitialLength>0</InitialLength>'
       + `<BorderStyle>SolidLine</BorderStyle><DYMORect><DYMOPoint><X>${this.num(r.x)}</X><Y>${this.num(r.y)}</Y></DYMOPoint>`
       + `<Size><Width>${this.num(r.w)}</Width><Height>${this.num(r.h)}</Height></Size></DYMORect>`
       + '<BorderColor><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></BorderColor>'
@@ -294,39 +368,60 @@ const Dymo = {
     return out;
   },
 
-  /** The labels as a spreadsheet for DYMO Connect's Import data: a row per printed label, columns as the design names its fields. */
+  /**
+   * The labels as a spreadsheet for DYMO Connect's Import data: a row per printed label, a column
+   * for each field of the design. Both are read from the same objects(), so a column always has an
+   * object of that name to go into. No cell holds a line break: DYMO Connect's import takes one as
+   * the end of the row, even inside quotes, which left the columns after it unread.
+   */
   csv(stock, labels, options = {}) {
-    // The columns are the design's fields, so each has an object to go into.
-    const columns = [];
-    stock.slots.forEach((slot, i) => {
-      if (slot.main) columns.push(`Text${i + 1}`, ...(this.qrSide(slot, options) ? [`QR${i + 1}`] : []));
-      if (slot.cap) columns.push(`Cap${i + 1}`);
+    const fields = (group) => {
+      const found = new Map();
+      stock.slots.forEach((slot, i) => {
+        if (!group[i]) return;
+        for (const o of this.objects(slot, group[i], i + 1, options)) {
+          found.set(o.name, String(o.kind === 'qr' ? o.value : o.lines.join(' ')).replace(/[\r\n]+/g, ' '));
+        }
+      });
+      return found;
+    };
+    const groups = this.groups(stock, labels);
+    // The design is the first printed label, so its fields are the columns.
+    const columns = [...fields(groups[0] || []).keys()];
+    const cell = (v) => (/[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = groups.map((group) => {
+      const found = fields(group);
+      return columns.map((col) => cell(found.get(col) || '')).join(',');
     });
-    const cell = (v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const rows = this.groups(stock, labels).map((group) => columns.map((col) => {
-      const n = Number(col.match(/\d+$/)[0]);
-      const label = group[n - 1];
-      if (!label) return '';
-      if (col.startsWith('QR')) return label.url || '';
-      if (col.startsWith('Cap')) return this.shortCode(label.code);
-      return [label.code, ...label.lines.filter(Boolean).slice(0, 3)].join('\n');
-    }).map(cell).join(','));
     return `﻿${[columns.join(','), ...rows].join('\r\n')}\r\n`;
   },
 
+  /** What a label is called in a sentence: LabTAG's by its code, the lab's own by its name. */
+  called(stock) { return stock.range === 'own' ? stock.name : `LabTAG ${stock.id}`; },
+
   readme(stock, region, count, groups) {
     const lwcs = stock.range === 'lwcs'
-      ? `\r\nThis is a LabelWriter 550 (LWCS) label. LabTAG publishes no template for it, so these files use the\r\n`
-        + `layout of ${stock.like}, the DY4 label of the same size. With the LWCS roll in the printer, DYMO Connect\r\n`
-        + 'recognises it; if it asks whether to use the label in the printer, say yes.\r\n'
+      ? `\r\nThis is a LabelWriter 550 (LWCS) label. LabTAG publishes no template for it, so these files place\r\n`
+        + `the stickers as ${stock.like} does, the DY4 label of the same size, and name no label stock of their\r\n`
+        + 'own: with the LWCS roll in the printer DYMO Connect recognises it, and if it asks whether to use\r\n'
+        + 'the label in the printer, say yes.\r\n'
       : '';
-    return [`${count} label${count === 1 ? '' : 's'} on LabTAG ${stock.id} (${stock.size}; ${stock.products}),`,
-      `${groups} printed label${groups === 1 ? '' : 's'}, for DYMO Connect (${region === 'EU' ? 'Europe' : 'North America'}).`, lwcs,
+    // A roll the lab measured itself, with no DYMO stock recorded: the file names none.
+    const roll = stock.range === 'own' && !Object.keys(stock.names).length
+      ? '\r\nNobody has recorded what DYMO Connect calls this roll, so these files name no label stock and\r\n'
+        + 'DYMO Connect prints on the label already loaded. If it offers to use the label in the printer,\r\n'
+        + 'say yes. Once you know the name it gives the roll, put it on the label in the labels page and\r\n'
+        + 'these files will ask for it.\r\n'
+      : '';
+    return [`${count} label${count === 1 ? '' : 's'} on ${this.called(stock)} (${stock.size}; ${stock.products}),`,
+      `${groups} printed label${groups === 1 ? '' : 's'}, for DYMO Connect (${region === 'EU' ? 'Europe' : 'North America'}).`, lwcs, roll,
       'TO PRINT A FEW: open a file in the "labels" folder in DYMO Connect (Open > Browse) and print it.',
       'Each file is one printed label, with its stickers filled in.', '',
       'TO PRINT MANY AT ONCE: open labels-design.dymo in DYMO Connect, choose Import data, pick',
-      'labels-data.csv, and connect each column to the object of the same name (Text1, QR1, Cap1 ...).',
-      'Then print: one printed label for each row.', '',
+      'labels-data.csv, and connect each column to the object of the same name (Text1, Text1b, QR1,',
+      'Cap1 ...). Then print: one printed label for each row.',
+      'Each line of a sticker is a column of its own: Text1 is its code, Text1b the line under it, and',
+      'so on. The columns are the fields of this design, so there is one for each.', '',
       'If DYMO Connect will not open a file, the computer may be set to the other region: export again',
       'with the other region chosen.', ''].join('\r\n');
   },

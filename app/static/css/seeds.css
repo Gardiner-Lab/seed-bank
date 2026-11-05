@@ -216,3 +216,14 @@ li.tree-focus > a.rec-link { background: var(--tt-green-soft); border-radius: .3
 .chip-pick input { margin: 0; cursor: pointer; }
 .chip-pick a { text-decoration: none; color: inherit; }
 .chip-pick.chosen { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+
+/* A label the lab measured itself: the pencil beside the picker, and the form it opens. */
+#ownLabel { display: inline-flex; align-items: center; gap: .3rem; }
+.own-label-dialog { border: 1px solid var(--border, #ccc); border-radius: .5rem; padding: 1rem 1.2rem; max-width: 26rem; }
+.own-label-dialog::backdrop { background: rgba(0, 0, 0, .3); }
+.own-label-dialog h2 { margin: 0 0 .6rem; font-size: 1.05rem; }
+.own-label-form .field { display: flex; justify-content: space-between; align-items: center; gap: .8rem; margin: .4rem 0; }
+.own-label-form .field input { font: inherit; padding: .25rem .35rem; width: 11rem; }
+.own-label-buttons { display: flex; gap: .4rem; margin-top: .8rem; }
+.own-label-error:empty { display: none; }
+.own-label-error { margin-top: .5rem; color: #c0392b; }

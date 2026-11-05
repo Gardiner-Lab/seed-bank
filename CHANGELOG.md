@@ -5,6 +5,28 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-05
+
+### Added
+- **A label of the lab's own.** The labels page offers LabTAG's labels; a roll the lab buys that is
+  not among them is now measured once — the tag, the spot or cap beside it, and the gap — and offered
+  to everyone, in both Lab Stocks and the Seed Bank. Anyone signed in may add, change or remove one
+  (the pencil beside the label picker). They are kept by the suite, not in one browser.
+- Where DYMO Connect's own name for a roll is known it can be recorded with the label, and the files
+  ask for that stock; without it they name none and DYMO Connect prints on the roll in the printer.
+
+### Fixed
+- **The spreadsheet for Import data lost every column after the first.** A sticker's lines of text sat
+  in one cell with line breaks inside the quotes, and DYMO Connect reads a line break as the end of the
+  row whatever the quotes — so the row ended mid-cell and `Cap1` was never seen as a column. Each line
+  of a sticker is now a column of its own (Text1, Text1b, Text1c) and a row is one line of the file.
+  The columns and the design are read from the same place, so neither can name a field the other lacks.
+- **An LWCS label asked DYMO Connect for the wrong template.** The five LWCS labels each copy the DY4
+  label of their size, and took its DYMO stock with them: LWCS-506 asked for a 56 x 94 mm shipping
+  label for a 33 mm label. A roll now names no stock unless one is recorded for it, and its page is
+  the label itself.
+- Each line of a sticker is sized in its own band, so text on a small label is larger than it was.
+
 ## [0.11.1] - 2026-11-05
 
 ### Changed

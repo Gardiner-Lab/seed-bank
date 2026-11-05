@@ -13,7 +13,10 @@ assert.strictEqual(DYMO_STOCKS.length, 19);
 assert.strictEqual(DYMO_LWCS.length, 5);
 assert.deepStrictEqual(DYMO_LWCS.map((s) => s.id), ['LWCS-501', 'LWCS-502', 'LWCS-504', 'LWCS-505', 'LWCS-506']);
 for (const s of Dymo.stocks) {
-  assert.ok(s.names.NA || s.names.EU, `${s.id}: a DYMO stock name`);
+  // A sheet label names the DYMO stock it is cut on. A roll is its own label, and names one only
+  // where somebody has recorded what DYMO Connect calls it, so that it is never named wrongly.
+  if (s.roll) assert.deepStrictEqual(s.names, {}, `${s.id}: a roll names no DYMO stock of its own`);
+  else assert.ok(s.names.NA || s.names.EU, `${s.id}: a DYMO stock name`);
   for (const slot of s.slots) {
     for (const part of [slot.main, slot.cap].filter(Boolean)) {
       // Each sticker part inside the label's printable area.
@@ -52,9 +55,22 @@ const files = Dymo.files('DY4-040', 'NA', labels, { qr: true });
 assert.deepStrictEqual(files.slice(0, 3).map((f) => f.name), ['README.txt', 'labels-design.dymo', 'labels-data.csv']);
 assert.strictEqual(files.filter((f) => f.name.startsWith('labels/')).length, 3);
 const csv = files[2].data.replace(/^﻿/, '').split('\r\n');
-assert.strictEqual(csv[0], 'Text1,QR1,Text2,QR2');
+assert.strictEqual(csv[0], 'QR1,Text1,Text1b,QR2,Text2,Text2b');
 for (const field of csv[0].split(',')) assert.ok(files[1].data.includes(`<Name>${field}</Name>`), `${field} is in the design`);
-assert.ok(csv[1].startsWith('"GL-G-0041\n'), 'a sticker\'s lines in one cell');
+// DYMO Connect's import reads a line break as the end of the row, quoted or not, which left every
+// column after it unread. So no cell holds one: a sticker's lines are a column each (Text1, Text1b,
+// Text1c), and a row is one line of the file.
+assert.ok(!csv.some((line) => line.includes('\n')), 'no line break inside a row');
+assert.strictEqual(csv.filter(Boolean).length, 1 + Dymo.groups(twoUp, labels).length, 'a header and a row per printed label');
+const split = (line) => line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+for (const line of csv.filter(Boolean)) assert.strictEqual(split(line).length, split(csv[0]).length, 'every row has every column');
+// The design and the spreadsheet are read from the same objects, so neither can name a field the other lacks.
+const named = [...new Set([...files[1].data.matchAll(/<Name>([^<]+)<\/Name>/g)].map((m) => m[1]))];
+assert.deepStrictEqual(csv[0].split(',').slice().sort(), named.slice().sort(), 'the columns are exactly the design\'s fields');
+// A sticker with room for several lines: a column for each, the code in its own cell.
+const long = Dymo.files('DY4-010', 'EU', labels.slice(0, 1), { qr: true })[2].data.replace(/^﻿/, '').split('\r\n');
+assert.ok(long[0].includes('Text1,Text1b,Text1c'), 'each line of text is a column of its own');
+assert.ok(long[1].includes('GL-G-0041,'), 'the code is a cell of its own');
 // Strips too thin for a QR code: no QR objects, and no QR columns.
 const strips = Dymo.files('DY4-075', 'EU', labels, { qr: true });
 assert.strictEqual(strips[2].data.replace(/^﻿/, '').split('\r\n')[0], 'Text1,Text2,Text3');
@@ -94,5 +110,47 @@ assert.ok(picture.includes('>GL-G-0041</text>') && picture.includes('>G-0041</te
 assert.ok(!picture.includes('pTest &amp;'), 'the same lines left out as in the file');
 assert.ok(picture.includes('class="cut"') && picture.includes('<ellipse class="cut"'), 'outlines, the cap round');
 assert.ok(!Dymo.svg(tube, labels.slice(0, 1), { qr: false }, () => modules).includes('<path'), 'no QR when not wanted');
+
+// --- Labels the lab has measured itself (the suite's label_stocks) --------------------------
+// Sigma Z743355: a 38.1 x 12.7 mm tag with a 9.5 mm spot 5 mm to its right, and no DYMO stock
+// recorded for the roll. Millimetres in, inches out, and the file names no label stock.
+const measured = [{ id: 'abc-123', name: 'Cryo-Tag 38 mm', tag_w: 38.1, tag_h: 12.7, spot: 9.5, gap: 5,
+  dymo_label: '', orientation: 'Landscape' }];
+const [own] = Dymo.own(measured);
+assert.strictEqual(own.range, 'own');
+assert.ok(own.roll, 'a label of the lab\'s own is a roll');
+assert.strictEqual(Dymo.num(own.slots[0].main.w), '1.5', '38.1 mm is 1.5 in');
+assert.strictEqual(Dymo.num(own.slots[0].main.h), '0.5');
+assert.strictEqual(Dymo.num(own.slots[0].cap.w), '0.374', '9.5 mm spot');
+// The spot sits past the tag and the gap, and is centred on the tag's height.
+assert.strictEqual(Dymo.num(own.slots[0].cap.x - (own.slots[0].main.x + own.slots[0].main.w)), '0.1969', '5 mm gap');
+assert.ok(Math.abs((own.slots[0].cap.y + own.slots[0].cap.h / 2) - (own.slots[0].main.y + own.slots[0].main.h / 2)) < 0.001);
+assert.strictEqual(own.size, '38.1 × 12.7 mm + 9.5 mm spot');
+assert.strictEqual(Dymo.called(own), 'Cryo-Tag 38 mm', 'named, not a uuid');
+assert.strictEqual(Dymo.stock('abc-123').id, 'abc-123', 'offered beside LabTAG\'s');
+// Its page is the label itself: tag + gap + spot across, the tag's height down, and a small margin.
+const ownPaper = Dymo.paper(own);
+assert.ok(Math.abs(ownPaper.w - (1.5 + 0.1969 + 0.374 + 0.08)) < 0.01, `page ${ownPaper.w} in across`);
+assert.ok(Math.abs(ownPaper.h - (0.5 + 0.08)) < 0.01, `page ${ownPaper.h} in down`);
+// Nobody has said what DYMO Connect calls the roll, so the file names no stock at all - naming the
+// wrong one is what sent LWCS-506 to a 56 x 94 mm shipping template.
+const ownFiles = Dymo.files('abc-123', 'EU', labels.slice(0, 1), { qr: true });
+const ownDesign = ownFiles.find((f) => f.name === 'labels-design.dymo').data;
+assert.ok(!ownDesign.includes('<LabelName>'), 'no label stock named when none is known');
+assert.ok(ownFiles[0].data.includes('prints on the label already loaded'), 'the README says so');
+assert.ok(ownFiles[0].data.includes('Cryo-Tag 38 mm'), 'the README names the label');
+// With a name recorded, that stock is asked for.
+const [withName] = Dymo.own([{ ...measured[0], dymo_label: 'Small30336' }]);
+assert.ok(Dymo.file(withName, 'EU', labels.slice(0, 1), {}).includes('<LabelName>Small30336</LabelName>'));
+// An LWCS label no longer borrows the DY4 sheet's stock: LWCS-506's was a 56 x 94 mm shipping label.
+const snapFile = Dymo.file(Dymo.stock('LWCS-506'), 'EU', labels.slice(0, 1), {});
+assert.ok(!snapFile.includes('LargeShipping'), 'LWCS-506 does not ask for a shipping label');
+assert.ok(!snapFile.includes('<LabelName>'), 'and names no stock of its own');
+// A DY4 sheet label is unchanged: it still names its stock and keeps its printable area.
+const sheet = Dymo.file(Dymo.stock('DY4-072'), 'EU', labels.slice(0, 1), {});
+assert.ok(sheet.includes('<LabelName>Small1976411</LabelName>'), 'a sheet label still names its stock');
+assert.ok(sheet.includes(`<X>${Dymo.num(Dymo.stock('DY4-072').rect.x)}</X>`), 'and keeps its printable area');
+Dymo.own([]);                                   // back to LabTAG's alone, for anything after this
+assert.ok(!Dymo.stocks.some((s) => s.range === 'own'));
 
 console.log('dymo: all checks passed');

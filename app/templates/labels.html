@@ -11,8 +11,9 @@
 <header class="tt-bar no-print">
     <a class="tt-home" href="{{ links.suite_home }}" title="All of Trellis Tools"><img src="{{ request.script_root }}/static/trellis/trellis.svg" alt=""><span>Trellis Tools</span></a>
     <a class="tt-module" href="{{ request.script_root }}/"><img src="{{ request.script_root }}/static/trellis/seeds.svg" alt="">Seed Bank</a><span class="tt-sub">Labels</span>
-    <span class="dymo-export" title="Files for DYMO Connect (the LabelWriter 550's software), on LabTAG labels">
-        <label class="hint">Label <select id="dymoStock"></select></label>
+    <span class="dymo-export" title="Files for DYMO Connect, on LabTAG labels or a label the lab has measured itself">
+        <span class="hint" id="ownLabel">Label <select id="dymoStock"></select><button class="icon-btn" id="btnOwnLabel"
+            type="button" title="A label of the lab's own: measure a roll once, and everyone can print on it">✎</button></span>
         <select id="dymoRegion" title="DYMO Connect's region: its label stock names differ between them">
             <option value="EU">Europe</option>
             <option value="NA">North America</option>
