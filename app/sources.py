@@ -1,7 +1,7 @@
 """
 What the seed bank reads from the other tools, never changing it.
 
-    Plasmids        from the Plasmid Editor's library, to say which construct a
+    Plasmids        from the Sequence Editor's library, to say which construct a
                     line carries; a plasmid opens in the editor.
     Notebook pages  that link to a line, seed lot or plant (data-seed="S-0001"),
                     shown on that record to whoever may open the page; and, for

@@ -12,7 +12,7 @@ The seed bank's database.
     seg_tests     selection-plate counts on a lot, for segregation (3:1, 15:1, homozygous)
     line_parents  the lines a line came from: a cross's mother and father, a
                   transformant's background
-    line_plasmids the plasmids a line carries, from the Plasmid Editor's library
+    line_plasmids the plasmids a line carries, from the Sequence Editor's library
     attachments   photos, 3D scans and files on any record
     changes       who changed what, and when, on every record
 

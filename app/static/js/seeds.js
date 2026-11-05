@@ -542,7 +542,7 @@ const App = {
       this.section('Plasmids',
         rec.plasmids.length ? el('div', { class: 'chips' }, rec.plasmids.map((p) => el('a', {
           class: 'chip chip-plasmid', href: `${SB.editor}/editor?open=${encodeURIComponent(p.id)}`, target: '_blank', rel: 'noopener',
-          title: 'Open in the Plasmid Editor' }, glyph('plasmid'), ` ${p.name}`))) : el('p', { class: 'hint' }, 'No plasmid recorded.'),
+          title: 'Open in the Sequence Editor' }, glyph('plasmid'), ` ${p.name}`))) : el('p', { class: 'hint' }, 'No plasmid recorded.'),
         el('button', { class: 'btn btn-secondary btn-sm', onclick: () => this.editPlasmids(rec) }, 'Change plasmids…')),
       this.section('Pedigree',
         rec.pedigree?.parents?.length ? el('ul', { class: 'tree' }, tree(rec.pedigree)) : el('p', { class: 'hint' }, 'No parent lines recorded.'),
@@ -601,7 +601,7 @@ const App = {
           el('button', { class: 'chip-x', title: 'Remove', onclick: () => { chosen.splice(i, 1); draw(); } }, '×')))
           : el('span', { class: 'hint' }, 'None'));
         draw();
-        body.append(el('p', { class: 'hint' }, 'From the Plasmid Editor\'s library. Crosses and lines founded from a plant take their parents\' plasmids.'),
+        body.append(el('p', { class: 'hint' }, 'From the Sequence Editor\'s library. Crosses and lines founded from a plant take their parents\' plasmids.'),
           list, el('button', { class: 'btn btn-secondary btn-sm', onclick: async () => {
             const p = await picker({ title: 'Add a plasmid', placeholder: 'Search the plasmid library',
               search: async (q) => (await api('GET', `/plasmids?q=${encodeURIComponent(q)}`)).plasmids,
@@ -1242,7 +1242,7 @@ const App = {
         c.opens ? el('a', { href: `${SB.editor}/editor?open=${encodeURIComponent(c.id)}`, target: '_blank', rel: 'noopener' }, el('b', {}, c.name), ' ↗')
           : el('b', {}, c.name),
         el('span', { class: 'hint' }, [c.length ? ` ${c.length.toLocaleString()} bp` : '', c.confirmed ? ' · ✓ sequence confirmed' : '',
-          c.missing ? ' · no longer in the Plasmid Editor' : ''].join('')),
+          c.missing ? ' · no longer in the Sequence Editor' : ''].join('')),
         t.focus.kind !== 'plasmid' ? el('a', { class: 'btn btn-secondary btn-sm', href: `#tree=plasmid:${c.id}`, title: 'Every line made with this plasmid' }, 'Its whole tree') : null),
       pages(c.mentions) ? el('div', {}, pages(c.mentions)) : null,
       c.carried_by.length && t.focus.kind !== 'plasmid' ? el('div', { class: 'hint' }, 'Carried by ',
@@ -1257,7 +1257,7 @@ const App = {
     put(main,
       el('div', { class: 'record-head' }, el('div', {}, el('div', { class: 'crumbs' }, back),
         el('h1', {}, glyph('link'), ' Family tree of ', title),
-        el('div', { class: 'hint' }, 'Where it came from and what came of it, across the Plasmid Editor, Lab Stocks and the seed bank, ',
+        el('div', { class: 'hint' }, 'Where it came from and what came of it, across the Sequence Editor, Lab Stocks and the seed bank, ',
           'with the notebook pages about each step you can open.'))),
       t.constructs.length ? this.section(t.focus.kind === 'plasmid' ? 'The plasmid' : 'Constructs', t.constructs.map(construct))
         : t.focus.kind !== 'plasmid' ? this.section('Constructs', el('p', { class: 'hint' }, 'No plasmid recorded on this line or the lines it came from.')) : null,

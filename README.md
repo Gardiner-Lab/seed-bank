@@ -5,7 +5,7 @@ grown from them, with how each descends from the others.
 
 - **Lines** are wild types, mutants, transgenic events, populations and crosses.
   - Each has a species, a background and its parent lines.
-  - It also records the **plasmids it carries**, from the Plasmid Editor's library, which open in
+  - It also records the **plasmids it carries**, from the Sequence Editor's library, which open in
     the editor.
 - **Seed lots** are seeds of a line and generation (T2, F3…).
   - They come from a plant here, from a cross, or from outside (a stock centre).

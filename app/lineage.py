@@ -2,7 +2,7 @@
 A record's family tree, across the suite: where it came from and what it led to.
 
     constructs   the plasmids its line carries (or a line it came from does), from
-                 the Plasmid Editor, each with its glycerol stocks in Lab Stocks
+                 the Sequence Editor, each with its glycerol stocks in Lab Stocks
     ancestry     the lines it descends from (its pedigree), and for a seed lot or
                  a plant the lots and plants it came from, oldest first
     descendants  what came from it: a line's seed lots, the plants sown from them,
