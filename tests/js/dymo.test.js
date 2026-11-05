@@ -153,4 +153,23 @@ assert.ok(sheet.includes(`<X>${Dymo.num(Dymo.stock('DY4-072').rect.x)}</X>`), 'a
 Dymo.own([]);                                   // back to LabTAG's alone, for anything after this
 assert.ok(!Dymo.stocks.some((s) => s.range === 'own'));
 
+// --- The separator DYMO Connect splits a row on -----------------------------------------------
+// On a Dutch or German computer the list separator is a semicolon, and a file of commas arrives as
+// one column - which is why the spreadsheet had to be opened in Excel and saved again.
+const semi = Dymo.files('DY4-040', 'NA', labels, { qr: true, separator: ';' })[2].data.replace(/^﻿/, '');
+const rowsOf = (text) => text.split('\r\n').filter(Boolean);
+assert.strictEqual(rowsOf(semi)[0], 'QR1;Text1;Text1b;QR2;Text2;Text2b', 'semicolons between the columns');
+for (const line of rowsOf(semi)) {
+  assert.strictEqual(line.split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/).length, 6, 'every row has every column');
+}
+// A comma in a cell needs no quotes when the separator is a semicolon, and the other way about.
+const commaInside = [{ code: 'GL-G-0041', lines: ['one, two', 'three'], url: 'u' }];
+assert.ok(Dymo.files('DY4-010', 'EU', commaInside, { separator: ';' })[2].data.includes('one, two;'),
+  'a comma in a cell is left alone when semicolons separate');
+assert.ok(Dymo.files('DY4-010', 'EU', commaInside, { separator: ',' })[2].data.includes('"one, two",'),
+  'and is quoted when commas do');
+assert.ok(Dymo.files('DY4-010', 'EU', commaInside, { separator: ';' })[0].data.includes('separated by a semicolon'),
+  'the README says which separator was used');
+assert.ok([';', ','].includes(Dymo.separator()), 'a separator is chosen for this computer');
+
 console.log('dymo: all checks passed');

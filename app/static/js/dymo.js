@@ -375,6 +375,11 @@ const Dymo = {
    * the end of the row, even inside quotes, which left the columns after it unread.
    */
   csv(stock, labels, options = {}) {
+    // DYMO Connect splits a row on the computer's own list separator, not always a comma: on a Dutch
+    // or German Windows, where the comma is the decimal mark, it is a semicolon, and a file of commas
+    // arrives as one column. Opening it in Excel and saving it again is what used to fix it, because
+    // Excel writes the separator the computer expects.
+    const sep = options.separator === ';' ? ';' : ',';
     const fields = (group) => {
       const found = new Map();
       stock.slots.forEach((slot, i) => {
@@ -388,18 +393,18 @@ const Dymo = {
     const groups = this.groups(stock, labels);
     // The design is the first printed label, so its fields are the columns.
     const columns = [...fields(groups[0] || []).keys()];
-    const cell = (v) => (/[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const cell = (v) => (v.includes('"') || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = groups.map((group) => {
       const found = fields(group);
-      return columns.map((col) => cell(found.get(col) || '')).join(',');
+      return columns.map((col) => cell(found.get(col) || '')).join(sep);
     });
-    return `﻿${[columns.join(','), ...rows].join('\r\n')}\r\n`;
+    return `﻿${[columns.join(sep), ...rows].join('\r\n')}\r\n`;
   },
 
   /** What a label is called in a sentence: LabTAG's by its code, the lab's own by its name. */
   called(stock) { return stock.range === 'own' ? stock.name : `LabTAG ${stock.id}`; },
 
-  readme(stock, region, count, groups) {
+  readme(stock, region, count, groups, options = {}) {
     const lwcs = stock.range === 'lwcs'
       ? `\r\nThis is a LabelWriter 550 (LWCS) label. LabTAG publishes no template for it, so these files place\r\n`
         + `the stickers as ${stock.like} does, the DY4 label of the same size, and name no label stock of their\r\n`
@@ -420,10 +425,26 @@ const Dymo = {
       'TO PRINT MANY AT ONCE: open labels-design.dymo in DYMO Connect, choose Import data, pick',
       'labels-data.csv, and connect each column to the object of the same name (Text1, Text1b, QR1,',
       'Cap1 ...). Then print: one printed label for each row.',
+      `The columns are separated by ${options.separator === ';' ? 'a semicolon' : 'a comma'}, which is what this`,
+      'computer\'s programs use. If DYMO Connect shows the whole row as one column, export again with',
+      'the other separator chosen on the labels page.',
       'Each line of a sticker is a column of its own: Text1 is its code, Text1b the line under it, and',
       'so on. The columns are the fields of this design, so there is one for each.', '',
       'If DYMO Connect will not open a file, the computer may be set to the other region: export again',
       'with the other region chosen.', ''].join('\r\n');
+  },
+
+  /**
+   * The list separator this computer's programs use: a semicolon where the comma is the decimal
+   * mark (Dutch, German, French and most of Europe), a comma elsewhere. DYMO Connect splits an
+   * imported row on it, so the spreadsheet is written with the same one.
+   */
+  separator() {
+    try {
+      return (1.1).toLocaleString().includes(',') ? ';' : ',';
+    } catch {
+      return ',';
+    }
   },
 
   /** Everything for DYMO Connect, as files: [{name, data}]. */
@@ -432,7 +453,7 @@ const Dymo = {
     const groups = this.groups(stock, labels);
     const safe = (s) => String(s).replace(/[^A-Za-z0-9._-]+/g, '_');
     return [
-      { name: 'README.txt', data: this.readme(stock, region, labels.length, groups.length) },
+      { name: 'README.txt', data: this.readme(stock, region, labels.length, groups.length, options) },
       { name: 'labels-design.dymo', data: this.file(stock, region, groups[0] || [], options) },
       { name: 'labels-data.csv', data: this.csv(stock, labels, options) },
       ...groups.map((group, i) => ({

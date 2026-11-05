@@ -19,6 +19,10 @@
             <option value="NA">North America</option>
         </select>
         <label class="hint" title="A QR code on each sticker that has room for one"><input type="checkbox" id="dymoQr" checked> QR</label>
+        <select id="dymoSep" title="How the columns of labels-data.csv are separated. DYMO Connect splits a row on the separator this computer's programs use: a semicolon where the comma is the decimal mark, a comma elsewhere.">
+            <option value=";">; semicolon</option>
+            <option value=",">, comma</option>
+        </select>
         <button class="btn btn-primary" onclick="window.print()" title="Print these labels, one to a page of the label's size"><img class="tt-glyph" src="{{ request.script_root }}/static/trellis/glyphs/print.svg" alt=""> Print</button>
         <button class="btn" id="btnDymo" title="A zip of .dymo files to open and print in DYMO Connect">⬇ DYMO files</button>
     </span>

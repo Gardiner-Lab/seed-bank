@@ -25,6 +25,11 @@ and the project uses [semantic versioning](https://semver.org/).
   label of their size, and took its DYMO stock with them: LWCS-506 asked for a 56 x 94 mm shipping
   label for a 33 mm label. A roll now names no stock unless one is recorded for it, and its page is
   the label itself.
+- **DYMO Connect read the spreadsheet as one column**, whatever the separator in it, on a computer whose
+  programs use the semicolon — Dutch, German, French and most of Europe, where the comma is the decimal
+  mark. Opening the file in Excel and saving it again was the way round it. The spreadsheet is now
+  written with the separator this computer uses, and the labels page has a picker beside the QR tick
+  for the other one.
 - Each line of a sticker is sized in its own band, so text on a small label is larger than it was.
 
 ## [0.11.1] - 2026-11-05

@@ -82,6 +82,7 @@ function setupDymo(labels, sheet) {
   const stock = document.getElementById('dymoStock');
   const region = document.getElementById('dymoRegion');
   const withQr = document.getElementById('dymoQr');
+  const sep = document.getElementById('dymoSep');
   const hint = document.getElementById('dymoHint');
   const recall = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
   const remember = (key, value) => { try { localStorage.setItem(key, value); } catch { /* not kept: fine */ } };
@@ -99,6 +100,8 @@ function setupDymo(labels, sheet) {
   fillStocks();
   region.value = recall('dymoRegion') === 'NA' ? 'NA' : 'EU';
   withQr.checked = recall('dymoQr') !== 'no';
+  // What this computer's programs use, unless someone has chosen otherwise here before.
+  sep.value = [';', ','].includes(recall('dymoSep')) ? recall('dymoSep') : Dymo.separator();
   const pageStyle = el('style');
   document.head.append(pageStyle);
   const draw = () => {
@@ -130,10 +133,11 @@ function setupDymo(labels, sheet) {
     node.addEventListener('change', () => { remember(key, node.value); describe(); draw(); });
   }
   withQr.addEventListener('change', () => { remember('dymoQr', withQr.checked ? 'yes' : 'no'); draw(); });
+  sep.addEventListener('change', () => remember('dymoSep', sep.value));
   document.getElementById('btnDymo').addEventListener('click', () => {
     if (!labels.length) return;
     const s = Dymo.stock(stock.value);
-    const files = Dymo.files(stock.value, region.value, labels, { qr: withQr.checked });
+    const files = Dymo.files(stock.value, region.value, labels, { qr: withQr.checked, separator: sep.value });
     const day = new Date().toISOString().slice(0, 10);
     const named = String(s.range === 'own' ? s.name : s.id).replace(/[^A-Za-z0-9._-]+/g, '-');
     Dymo.download(`labels-${named}-${day}.zip`, Dymo.zip(files));
