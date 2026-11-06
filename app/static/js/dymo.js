@@ -398,7 +398,12 @@ const Dymo = {
       const found = fields(group);
       return columns.map((col) => cell(found.get(col) || '')).join(sep);
     });
-    return `﻿${[columns.join(sep), ...rows].join('\r\n')}\r\n`;
+    // No byte-order mark, and that is deliberate: with one, DYMO Connect's Import data read every
+    // row as a single column, whichever separator the file used. Opening the file in Excel and
+    // saving it again was what used to fix it, and in this data - plain ASCII throughout - the only
+    // thing Excel changes is that it writes no mark. Do not put one back. The .dymo design above
+    // keeps its own; that one DYMO Connect reads without complaint.
+    return `${[columns.join(sep), ...rows].join('\r\n')}\r\n`;
   },
 
   /** What a label is called in a sentence: LabTAG's by its code, the lab's own by its name. */

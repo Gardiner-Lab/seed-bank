@@ -54,7 +54,10 @@ assert.deepStrictEqual(Dymo.groups(twoUp, labels).map((g) => g.length), [2, 2, 1
 const files = Dymo.files('DY4-040', 'NA', labels, { qr: true });
 assert.deepStrictEqual(files.slice(0, 3).map((f) => f.name), ['README.txt', 'labels-design.dymo', 'labels-data.csv']);
 assert.strictEqual(files.filter((f) => f.name.startsWith('labels/')).length, 3);
-const csv = files[2].data.replace(/^﻿/, '').split('\r\n');
+// No byte-order mark: with one, DYMO Connect's Import data read every row as a single column,
+// whichever separator the file used, and Excel's resave fixed it only by dropping the mark.
+assert.ok(!files[2].data.startsWith('\ufeff'), 'the spreadsheet carries no byte-order mark');
+const csv = files[2].data.split('\r\n');
 assert.strictEqual(csv[0], 'QR1,Text1,Text1b,QR2,Text2,Text2b');
 for (const field of csv[0].split(',')) assert.ok(files[1].data.includes(`<Name>${field}</Name>`), `${field} is in the design`);
 // DYMO Connect's import reads a line break as the end of the row, quoted or not, which left every
@@ -68,12 +71,12 @@ for (const line of csv.filter(Boolean)) assert.strictEqual(split(line).length, s
 const named = [...new Set([...files[1].data.matchAll(/<Name>([^<]+)<\/Name>/g)].map((m) => m[1]))];
 assert.deepStrictEqual(csv[0].split(',').slice().sort(), named.slice().sort(), 'the columns are exactly the design\'s fields');
 // A sticker with room for several lines: a column for each, the code in its own cell.
-const long = Dymo.files('DY4-010', 'EU', labels.slice(0, 1), { qr: true })[2].data.replace(/^﻿/, '').split('\r\n');
+const long = Dymo.files('DY4-010', 'EU', labels.slice(0, 1), { qr: true })[2].data.split('\r\n');
 assert.ok(long[0].includes('Text1,Text1b,Text1c'), 'each line of text is a column of its own');
 assert.ok(long[1].includes('GL-G-0041,'), 'the code is a cell of its own');
 // Strips too thin for a QR code: no QR objects, and no QR columns.
 const strips = Dymo.files('DY4-075', 'EU', labels, { qr: true });
-assert.strictEqual(strips[2].data.replace(/^﻿/, '').split('\r\n')[0], 'Text1,Text2,Text3');
+assert.strictEqual(strips[2].data.split('\r\n')[0], 'Text1,Text2,Text3');
 assert.ok(!strips[1].data.includes('QRCodeObject'));
 // An LWCS label says how DYMO Connect takes it.
 assert.ok(Dymo.files('LWCS-506', 'EU', labels)[0].data.includes('recognises'));
@@ -156,7 +159,7 @@ assert.ok(!Dymo.stocks.some((s) => s.range === 'own'));
 // --- The separator DYMO Connect splits a row on -----------------------------------------------
 // On a Dutch or German computer the list separator is a semicolon, and a file of commas arrives as
 // one column - which is why the spreadsheet had to be opened in Excel and saved again.
-const semi = Dymo.files('DY4-040', 'NA', labels, { qr: true, separator: ';' })[2].data.replace(/^﻿/, '');
+const semi = Dymo.files('DY4-040', 'NA', labels, { qr: true, separator: ';' })[2].data;
 const rowsOf = (text) => text.split('\r\n').filter(Boolean);
 assert.strictEqual(rowsOf(semi)[0], 'QR1;Text1;Text1b;QR2;Text2;Text2b', 'semicolons between the columns');
 for (const line of rowsOf(semi)) {

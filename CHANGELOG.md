@@ -5,6 +5,17 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-06
+
+### Fixed
+- **DYMO Connect read the whole spreadsheet as one column, and the separator was not the reason.**
+  `labels-data.csv` began with a byte-order mark, and with one DYMO Connect's Import data took every
+  row as a single cell whichever separator the file used - so a comma file and a semicolon file
+  failed the same way. The file is now written without it. Opening the file in Excel and saving it
+  again was the workaround, and dropping that mark is the only thing Excel changed in this data,
+  which is all plain text. The `labels-design.dymo` file keeps its own mark; that one DYMO Connect
+  has always read.
+
 ## [0.12.0] - 2026-11-05
 
 ### Added
