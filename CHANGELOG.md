@@ -5,6 +5,17 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-11-07
+
+### Fixed
+- **DYMO Connect still read the label spreadsheet as one column on some computers.** It splits a CSV
+  on the list separator in Windows' regional settings, which a browser cannot see (its own language
+  can differ), so the separator the labels page guessed could be the wrong one, and a file of commas
+  arrived as a single column. The download now also has **`labels-data.xlsx`**, an Excel workbook with
+  the same table: its columns are columns on any computer, and every cell is text, so codes keep
+  their leading zeros. The README says to import it. `labels-data.csv` is still there, with the
+  separator chosen on the labels page.
+
 ## [0.12.1] - 2026-11-06
 
 ### Fixed

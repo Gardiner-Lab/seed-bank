@@ -375,11 +375,28 @@ const Dymo = {
    * the end of the row, even inside quotes, which left the columns after it unread.
    */
   csv(stock, labels, options = {}) {
-    // DYMO Connect splits a row on the computer's own list separator, not always a comma: on a Dutch
-    // or German Windows, where the comma is the decimal mark, it is a semicolon, and a file of commas
-    // arrives as one column. Opening it in Excel and saving it again is what used to fix it, because
-    // Excel writes the separator the computer expects.
+    // DYMO Connect splits a row on Windows' own list separator (its regional settings), not always a
+    // comma: on a Dutch or German Windows, where the comma is the decimal mark, it is a semicolon, and
+    // a file of commas arrives as one column. A browser cannot see that setting - its own language can
+    // differ from Windows' - so the separator is chosen on the labels page, and labels-data.xlsx, which
+    // has no separator at all, is the file to import (see xlsx()).
     const sep = options.separator === ';' ? ';' : ',';
+    const { columns, rows: table } = this.table(stock, labels, options);
+    const cell = (v) => (v.includes('"') || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = table.map((row) => row.map(cell).join(sep));
+    // No byte-order mark, and that is deliberate: with one, DYMO Connect's Import data read every
+    // row as a single column, whichever separator the file used. Opening the file in Excel and
+    // saving it again was what used to fix it, and in this data - plain ASCII throughout - the only
+    // thing Excel changes is that it writes no mark. Do not put one back. The .dymo design above
+    // keeps its own; that one DYMO Connect reads without complaint.
+    return `${[columns.join(sep), ...rows].join('\r\n')}\r\n`;
+  },
+
+  /**
+   * The spreadsheet's content: columns (the fields of the design, read from the first printed label)
+   * and a row of cell texts per printed label. No cell holds a line break.
+   */
+  table(stock, labels, options = {}) {
     const fields = (group) => {
       const found = new Map();
       stock.slots.forEach((slot, i) => {
@@ -393,17 +410,62 @@ const Dymo = {
     const groups = this.groups(stock, labels);
     // The design is the first printed label, so its fields are the columns.
     const columns = [...fields(groups[0] || []).keys()];
-    const cell = (v) => (v.includes('"') || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = groups.map((group) => {
       const found = fields(group);
-      return columns.map((col) => cell(found.get(col) || '')).join(sep);
+      return columns.map((col) => found.get(col) || '');
     });
-    // No byte-order mark, and that is deliberate: with one, DYMO Connect's Import data read every
-    // row as a single column, whichever separator the file used. Opening the file in Excel and
-    // saving it again was what used to fix it, and in this data - plain ASCII throughout - the only
-    // thing Excel changes is that it writes no mark. Do not put one back. The .dymo design above
-    // keeps its own; that one DYMO Connect reads without complaint.
-    return `${[columns.join(sep), ...rows].join('\r\n')}\r\n`;
+    return { columns, rows };
+  },
+
+  /**
+   * The same table as an Excel workbook (.xlsx), for DYMO Connect's Import data. A workbook has real
+   * columns, so nothing depends on which list separator the computer uses - the reason a CSV of
+   * commas arrives as one column on a Dutch or German Windows. Every cell is text (an inline string),
+   * so a code such as 0041 keeps its zeros. A Uint8Array: the few XML parts of a workbook, zipped.
+   */
+  xlsx(stock, labels, options = {}) {
+    const { columns, rows } = this.table(stock, labels, options);
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+      // Characters XML 1.0 does not allow at all.
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+    const letter = (i) => {
+      let s = '';
+      for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+      return s;
+    };
+    const row = (cells, r) => `<row r="${r}">${cells.map((v, c) => (v === ''
+      ? '' : `<c r="${letter(c)}${r}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`)).join('')}</row>`;
+    const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const ns = 'http://schemas.openxmlformats.org';
+    const sheet = `${head}<worksheet xmlns="${ns}/spreadsheetml/2006/main"><sheetData>`
+      + [columns, ...rows].map((cells, i) => row(cells, i + 1)).join('') + '</sheetData></worksheet>';
+    return this.zip([
+      { name: '[Content_Types].xml', data: `${head}<Types xmlns="${ns}/package/2006/content-types">`
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        + '</Types>' },
+      { name: '_rels/.rels', data: `${head}<Relationships xmlns="${ns}/package/2006/relationships">`
+        + `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
+        + '</Relationships>' },
+      { name: 'xl/workbook.xml', data: `${head}<workbook xmlns="${ns}/spreadsheetml/2006/main" `
+        + `xmlns:r="${ns}/officeDocument/2006/relationships"><sheets><sheet name="Labels" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+      { name: 'xl/_rels/workbook.xml.rels', data: `${head}<Relationships xmlns="${ns}/package/2006/relationships">`
+        + `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
+        + `<Relationship Id="rId2" Type="${ns}/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+        + '</Relationships>' },
+      { name: 'xl/styles.xml', data: `${head}<styleSheet xmlns="${ns}/spreadsheetml/2006/main">`
+        + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+        + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        + '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+        + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        + '</styleSheet>' },
+      { name: 'xl/worksheets/sheet1.xml', data: sheet },
+    ]);
   },
 
   /** What a label is called in a sentence: LabTAG's by its code, the lab's own by its name. */
@@ -428,11 +490,12 @@ const Dymo = {
       'TO PRINT A FEW: open a file in the "labels" folder in DYMO Connect (Open > Browse) and print it.',
       'Each file is one printed label, with its stickers filled in.', '',
       'TO PRINT MANY AT ONCE: open labels-design.dymo in DYMO Connect, choose Import data, pick',
-      'labels-data.csv, and connect each column to the object of the same name (Text1, Text1b, QR1,',
+      'labels-data.xlsx, and connect each column to the object of the same name (Text1, Text1b, QR1,',
       'Cap1 ...). Then print: one printed label for each row.',
-      `The columns are separated by ${options.separator === ';' ? 'a semicolon' : 'a comma'}, which is what this`,
-      'computer\'s programs use. If DYMO Connect shows the whole row as one column, export again with',
-      'the other separator chosen on the labels page.',
+      'labels-data.xlsx is an Excel workbook, so its columns are columns on any computer. The same',
+      `table is in labels-data.csv, its columns separated by ${options.separator === ';' ? 'a semicolon' : 'a comma'}. DYMO Connect splits`,
+      'a CSV on the list separator in Windows\' regional settings, so if it shows a whole row of the',
+      'CSV as one column, use the .xlsx, or export again with the other separator on the labels page.',
       'Each line of a sticker is a column of its own: Text1 is its code, Text1b the line under it, and',
       'so on. The columns are the fields of this design, so there is one for each.', '',
       'If DYMO Connect will not open a file, the computer may be set to the other region: export again',
@@ -461,6 +524,7 @@ const Dymo = {
       { name: 'README.txt', data: this.readme(stock, region, labels.length, groups.length, options) },
       { name: 'labels-design.dymo', data: this.file(stock, region, groups[0] || [], options) },
       { name: 'labels-data.csv', data: this.csv(stock, labels, options) },
+      { name: 'labels-data.xlsx', data: this.xlsx(stock, labels, options) },
       ...groups.map((group, i) => ({
         name: `labels/${String(i + 1).padStart(3, '0')}_${safe(group.map((l) => l.code).join('_')).slice(0, 80)}.dymo`,
         data: this.file(stock, region, group, options),

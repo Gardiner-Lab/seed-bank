@@ -175,4 +175,18 @@ assert.ok(Dymo.files('DY4-010', 'EU', commaInside, { separator: ';' })[0].data.i
   'the README says which separator was used');
 assert.ok([';', ','].includes(Dymo.separator()), 'a separator is chosen for this computer');
 
+// The same table as an Excel workbook, the file to import: real columns, whatever list separator
+// Windows' regional settings use (a CSV of commas arrived as one column on a Dutch Windows).
+const book = files.find((f) => f.name === 'labels-data.xlsx');
+assert.ok(book && book.data instanceof Uint8Array, 'the download has labels-data.xlsx');
+assert.strictEqual(String.fromCharCode(book.data[0], book.data[1]), 'PK', 'an .xlsx is a zip');
+const bookText = new TextDecoder().decode(book.data);
+for (const part of ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels',
+  'xl/styles.xml', 'xl/worksheets/sheet1.xml']) assert.ok(bookText.includes(part), `the workbook has ${part}`);
+const header = csv[0].split(',');
+header.forEach((col, i) => assert.ok(bookText.includes(`<t xml:space="preserve">${col}</t>`), `column ${col} heads the sheet`));
+assert.ok(bookText.includes('<t xml:space="preserve">GL-G-0041</t>'), 'a code is a text cell');
+assert.ok(files[0].data.includes('labels-data.xlsx'), 'the README says to import the workbook');
+if (process.env.DYMO_XLSX_OUT) require('fs').writeFileSync(process.env.DYMO_XLSX_OUT, book.data);
+
 console.log('dymo: all checks passed');
