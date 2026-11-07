@@ -31,6 +31,19 @@ def _read(path: str, sql: str, args=()) -> List[sqlite3.Row]:
         return []
 
 
+def _demo(person: Person) -> bool:
+    """In the teaching demo (app/chairs.py): what is public to every lab is not shown to it."""
+    cached = getattr(person, '_in_demo', None)
+    if cached is None:
+        from app import chairs
+        cached = chairs.in_demo(person)
+        try:
+            person._in_demo = cached
+        except AttributeError:
+            pass
+    return cached
+
+
 def _public_column(path: str) -> str:
     """The editor's "Public" flag, or none (0) in an editor database from before it."""
     names = {r['name'] for r in _read(path, 'PRAGMA table_info(sequences)')}
@@ -46,9 +59,10 @@ def plasmids(person: Person, query: str = '', limit: int = 25) -> List[dict]:
                  'FROM sequences s LEFT JOIN users u ON u.id = s.owner_id '
                  "WHERE (? = '' OR s.name LIKE ?) ORDER BY CASE WHEN s.name LIKE ? THEN 0 ELSE 1 END, "
                  's.updated_at DESC LIMIT 400', (q, f'%{q}%', f'{q}%'))
+    public_ok = not _demo(person)
     found = []
     for r in rows:
-        if person.oversees(r['owner']) or person.shares_lab(r['owner']) or r['public']:
+        if person.oversees(r['owner']) or person.shares_lab(r['owner']) or (r['public'] and public_ok):
             found.append({'id': r['id'], 'name': r['name'], 'length': r['length'], 'owner': r['owner'],
                           'confirmed': bool(r['confirmed_at'])})
         if len(found) >= limit:
@@ -62,7 +76,8 @@ def notebook_mentions(person: Person, code: str) -> List[dict]:
                  "SELECT n.id, n.title, n.type, n.owner, n.updated_at FROM links l JOIN notes n ON n.id = l.note_id "
                  "WHERE l.target_type = 'seed' AND l.target_id = ? AND n.deleted_at IS NULL "
                  'ORDER BY n.updated_at DESC LIMIT 100', (code,))
-    return [dict(r) for r in rows if r['owner'] is None or person.oversees(r['owner'])]
+    library_ok = not _demo(person)
+    return [dict(r) for r in rows if (r['owner'] is None and library_ok) or person.oversees(r['owner'])]
 
 
 def plasmid_info(person: Person, ids: Iterable[str]) -> Dict[str, dict]:
@@ -74,8 +89,10 @@ def plasmid_info(person: Person, ids: Iterable[str]) -> Dict[str, dict]:
     rows = _read(path, f'SELECT s.id, s.name, length(s.sequence) AS length, {_public_column(path)}, s.confirmed_at, '
                        f'u.username AS owner FROM sequences s LEFT JOIN users u ON u.id = s.owner_id '
                        f'WHERE s.id IN ({",".join("?" * len(ids))})', ids)
+    public_ok = not _demo(person)
     return {r['id']: {'name': r['name'], 'length': r['length'], 'confirmed': bool(r['confirmed_at']),
-                      'opens': bool(person.oversees(r['owner']) or person.shares_lab(r['owner']) or r['public'])}
+                      'opens': bool(person.oversees(r['owner']) or person.shares_lab(r['owner'])
+                                    or (r['public'] and public_ok))}
             for r in rows}
 
 
@@ -108,7 +125,7 @@ def mentions_of(person: Person, targets: Iterable[Tuple[str, str]]) -> Dict[Tupl
                            + ' OR '.join(['(l.target_type = ? AND l.target_id = ?)'] * len(chunk))
                            + ') ORDER BY n.updated_at DESC', [x for t in chunk for x in t])
         for r in rows:
-            if r['owner'] is None or person.oversees(r['owner']):
+            if (r['owner'] is None and not _demo(person)) or person.oversees(r['owner']):
                 out.setdefault((r['target_type'], r['target_id']), []).append(
                     {'id': r['id'], 'title': r['title'], 'updated_at': r['updated_at']})
     return out

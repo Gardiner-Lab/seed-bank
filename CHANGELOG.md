@@ -5,6 +5,11 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-08
+
+### Demo
+- **The teaching demo sees only the demo's.** Someone in the suite's demo is not offered a real lab's public plasmids, nor notebook pages beyond the demo's own.
+
 ## [0.12.2] - 2026-11-07
 
 ### Fixed

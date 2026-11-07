@@ -490,3 +490,26 @@ def test_every_page_reaches_the_suite_and_its_other_tools():
             continue
         assert 'class="tt-home" href="{{ links.suite_home }}"' in html, f'{page.name}: home link is not the suite'
         assert 'trellis/modules.js' in html, f'{page.name}: the other tools are not linked'
+
+
+def test_the_demo_sees_no_real_labs_public_plasmids(as_user, world):
+    """Other Lab as the teaching demo: a real lab's public plasmid is not offered to it."""
+    conn = sqlite3.connect(world['paths']['editor'])
+    conn.execute('ALTER TABLE sequences ADD COLUMN public INTEGER DEFAULT 0')
+    conn.execute("UPDATE sequences SET public = 1 WHERE id = 'p1'")
+    conn.commit()
+    conn.close()
+    assert {p['id'] for p in _ok(as_user('zoe').get('/api/plasmids'))['plasmids']} == {'p1'}
+    conn = sqlite3.connect(world['paths']['suite'])
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE chair_groups (id TEXT PRIMARY KEY, name TEXT);
+        ALTER TABLE labs ADD COLUMN chair_group_id TEXT;
+        INSERT INTO chair_groups VALUES ('demo', 'Demo Chair Group');
+        UPDATE labs SET chair_group_id = 'demo' WHERE id = 2;
+        INSERT OR REPLACE INTO settings VALUES ('demo.chair_group', 'demo');
+    """)
+    conn.commit()
+    conn.close()
+    assert _ok(as_user('zoe').get('/api/plasmids'))['plasmids'] == []
+    assert {p['id'] for p in _ok(as_user('ben').get('/api/plasmids'))['plasmids']} == {'p1', 'p2'}

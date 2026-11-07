@@ -41,3 +41,26 @@ def mates(labs: Set[str]) -> Set[str]:
                           f'WHERE l.chair_group_id IS NOT NULL AND lower(l.name) IN ({", ".join("?" * len(labs))})',
                  sorted(labs))
     return {r['name'].casefold() for r in rows}
+
+
+def demo_labs() -> Set[str]:
+    """
+    The teaching demo's labs (casefolded): those in the chair group the suite records as the
+    demo's (suite.db settings 'demo.chair_group', set by the suite's demo/accounts.py).
+    """
+    rows = _read(_path(), "SELECT value FROM settings WHERE key = 'demo.chair_group'")
+    if not rows or not rows[0]['value'] or not _known():
+        return set()
+    return {r['name'].casefold() for r in _read(_path(), 'SELECT name FROM labs WHERE chair_group_id = ?',
+                                                 (rows[0]['value'],))}
+
+
+def in_demo(person) -> bool:
+    """
+    In the teaching demo: every lab of theirs is one of the demo's. They see the demo's records
+    only: no plasmid of a real lab's, however public, and no page of the notebook's library.
+    """
+    if person is None or person.is_admin:
+        return False
+    mine = person.lab_names()
+    return bool(mine) and mine <= demo_labs()
