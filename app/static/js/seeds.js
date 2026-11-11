@@ -478,8 +478,10 @@ const App = {
     // Another lab's (seen through a chair group): only what looks at it, nothing that changes it.
     main.classList.toggle('readonly', rec.mine === false);
     const view = { line: () => this.lineView(rec), lot: () => this.lotView(rec), plant: () => this.plantView(rec) }[kind]();
+    const genome = el('div');
     put(main, view, this.observations(rec), this.files(rec.kind, rec.code, rec.attachments, 'Photos, 3D scans and files'),
-      this.mentions(rec), this.history(rec));
+      this.mentions(rec), genome, this.history(rec));
+    this.genomeTags(rec, genome);
   },
 
   reload() { this.showRecord(this.rec.kind, this.rec.code); },
@@ -1371,6 +1373,33 @@ const App = {
     return this.section('In the lab notebook', el('ul', { class: 'plain' }, rec.mentions.map((m) => el('li', {},
       el('a', { href: `${SB.notebook}/#note=${m.id}`, target: '_blank', rel: 'noopener' }, glyph('notebook'), ` ${m.title}`),
       el('span', { class: 'hint' }, m.owner ? ` · ${m.owner}` : ' · protocol library')))));
+  },
+
+  /**
+   * The genomes and tracks tagged with this record in the Genome Browser, as far as this person may open
+   * them there: the Genome Browser answers, by its own sharing rules. Nothing shows when none are, or
+   * when the Genome Browser is not part of the suite.
+   */
+  async genomeTags(rec, holder) {
+    if (!SB.genome) return;
+    let found;
+    try {
+      const res = await fetch(`${SB.genome}/api/seed-stocks/${encodeURIComponent(rec.code)}/tagged`, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      found = await res.json();
+    } catch (err) { return; }
+    if (!holder.isConnected || this.rec !== rec) return;      // another record opened meanwhile
+    const tracks = found.tracks || [];
+    const genomes = found.genomes || [];
+    if (!tracks.length && !genomes.length) return;
+    const open = (query) => `${SB.genome}/?${query}`;
+    put(holder, this.section('In the Genome Browser', el('ul', { class: 'plain' },
+      genomes.map((g) => el('li', {},
+        el('a', { href: open(`genome=${encodeURIComponent(g.id)}`), target: '_blank', rel: 'noopener' }, glyph('line'), ` ${g.name}`),
+        el('span', { class: 'hint' }, ` · genome${g.assembly_id ? `, ${g.assembly_id}` : ''}`))),
+      tracks.map((t) => el('li', {},
+        el('a', { href: open(`track=${encodeURIComponent(t.id)}`), target: '_blank', rel: 'noopener' }, glyph('trace'), ` ${t.name}`),
+        el('span', { class: 'hint' }, ` · on ${t.genome}${t.experiment ? ` · ${t.experiment}` : ''}`))))));
   },
 
   history(rec) {

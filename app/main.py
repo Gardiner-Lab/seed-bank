@@ -10,7 +10,7 @@ import os
 
 from flask import Flask, redirect, render_template, request
 
-APP_VERSION = '0.13.0'
+APP_VERSION = '0.14.0'
 
 
 class PrefixMiddleware:
@@ -43,6 +43,8 @@ def create_app() -> Flask:
             'suite_home': os.environ.get('SUITE_HOME_URL', '/'),
             'editor': os.environ.get('EDITOR_URL', '/editor').rstrip('/'),
             'notebook': os.environ.get('NOTEBOOK_URL', '/notebook').rstrip('/'),
+            # A record's page lists the genomes and tracks tagged with it there.
+            'genome': os.environ.get('GENOME_URL', '/genome').rstrip('/'),
             # Lab Stocks copies the seed lots to eLabJournal; a lot's page asks it how far.
             'stocks': os.environ.get('STOCKS_URL', '/stocks').rstrip('/'),
             'logout': os.environ.get('SUITE_LOGOUT_URL', '/account/logout'),

@@ -37,6 +37,7 @@
         base: {{ request.script_root | tojson }},
         editor: {{ links.editor | tojson }},
         notebook: {{ links.notebook | tojson }},
+        genome: {{ links.genome | tojson }},
         stocks: {{ links.stocks | tojson }},
         person: {{ person.to_dict() | tojson }},
     };

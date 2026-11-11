@@ -5,6 +5,14 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-11
+
+### Added
+- **In the Genome Browser.** A line's, lot's or plant's page lists the genomes and tracks tagged with it in the
+  Genome Browser, as far as the person may open them there (the Genome Browser decides, by its own sharing), each
+  opening the genome or the track. Nothing shows when there are none or the Genome Browser is not in the suite.
+  `GENOME_URL` (default `/genome`).
+
 ## [0.13.0] - 2026-11-08
 
 ### Demo
