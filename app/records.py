@@ -395,6 +395,10 @@ def _lot_fields(data: dict, partial: bool = False) -> Dict[str, Any]:
         out['zygosity'] = z
     if 'used_up' in data:
         out['used_up'] = 1 if data.get('used_up') else 0
+    # Sown, and nothing came up: a used-up lot whose seed was dead, told apart
+    # from one that simply ran out or was given away.
+    if 'did_not_germinate' in data:
+        out['did_not_germinate'] = 1 if data.get('did_not_germinate') else 0
     return out
 
 
@@ -750,6 +754,7 @@ def list_lots(person: Person, q: str = '', limit: int = 500) -> List[dict]:
         return [{'id': r['id'], 'code': r['code'], 'line': r['line_name'], 'line_code': r['line_code'],
                  'generation': r['generation'], 'location': r['location'], 'amount': r['amount'],
                  'zygosity': r['zygosity'], 'germination': r['germination'], 'used_up': bool(r['used_up']),
+                 'did_not_germinate': bool(r['did_not_germinate'] if 'did_not_germinate' in r.keys() else 0),
                  'from_plant': r['plant_code'], 'source': r['source'], 'harvested_on': r['harvested_on'],
                  'sown': r['sown'], 'lab': r['lab']}
                 for r in rows if can_see(person, r)][:limit]
@@ -847,7 +852,9 @@ def lot_detail(person: Person, ident: str) -> dict:
         return {**dict(row), 'kind': 'lot', 'line': _brief(conn, 'line', row['line_id']),
                 'from_plant': _brief(conn, 'plant', row['from_plant_id']),
                 'father_plant': _brief(conn, 'plant', row['father_plant_id']),
-                'used_up': bool(row['used_up']), 'plants': plants, 'seg_tests': tests,
+                'used_up': bool(row['used_up']),
+                'did_not_germinate': bool(row['did_not_germinate'] if 'did_not_germinate' in row.keys() else 0),
+                'plants': plants, 'seg_tests': tests,
                 'next_generation': next_generation(row['generation']),
                 'ancestry': _ancestry(conn, 'lot', row['id']), 'descendants': _descendants(conn, 'lot', row['id']),
                 **_extras(conn, 'lot', row['id'])}

@@ -513,3 +513,33 @@ def test_the_demo_sees_no_real_labs_public_plasmids(as_user, world):
     conn.close()
     assert _ok(as_user('zoe').get('/api/plasmids'))['plasmids'] == []
     assert {p['id'] for p in _ok(as_user('ben').get('/api/plasmids'))['plasmids']} == {'p1', 'p2'}
+
+
+def test_a_lot_can_be_flagged_as_did_not_germinate(as_user):
+    """A used-up lot whose seed was dead, told apart from one that simply ran out."""
+    ana = as_user('ana')
+    line = _line(ana, 'Col-0 dead stock')
+    lot = _lot(ana, line['code'], source='an old packet')
+    assert lot['did_not_germinate'] is False
+
+    saved = _ok(ana.put(f"/api/lots/{lot['code']}", json={'did_not_germinate': True, 'used_up': True}))['record']
+    assert saved['did_not_germinate'] is True and saved['used_up'] is True
+    # It comes back on the record and in the list.
+    assert ana.get(f"/api/lot/{lot['code']}").get_json()['record']['did_not_germinate'] is True
+    listed = {l['code']: l for l in ana.get('/api/lots').get_json()['lots']}
+    assert listed[lot['code']]['did_not_germinate'] is True
+
+    # It is a plain flag: it can be taken off again, and it leaves used_up alone.
+    off = _ok(ana.put(f"/api/lots/{lot['code']}", json={'did_not_germinate': False}))['record']
+    assert off['did_not_germinate'] is False and off['used_up'] is True
+
+
+def test_the_flag_is_not_set_by_accident(as_user):
+    """Editing other fields leaves it as it was, and only the lot's own lab sets it."""
+    ana, zoe = as_user('ana'), as_user('zoe')      # zoe is in the other lab
+    line = _line(ana, 'Col-0 flagging')
+    lot = _lot(ana, line['code'])
+    _ok(ana.put(f"/api/lots/{lot['code']}", json={'did_not_germinate': True}))
+    after = _ok(ana.put(f"/api/lots/{lot['code']}", json={'amount': '20 mg'}))['record']
+    assert after['did_not_germinate'] is True, 'an unrelated edit cleared the flag'
+    assert zoe.put(f"/api/lots/{lot['code']}", json={'did_not_germinate': False}).status_code in (403, 404)

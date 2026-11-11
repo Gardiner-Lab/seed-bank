@@ -5,6 +5,14 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-11
+
+### Added
+- **Did not germinate.** A seed lot carries a tick for it, beside *Used up*: the lot was sown and nothing came up.
+  It tells a lot whose seed was dead apart from one that simply ran out or was given away, which a used-up lot
+  with no plants could not say before. The lot's page says it under the title, the seed lot list says *none*
+  where the germination percentage goes, and a family tree says it on the lot.
+
 ## [0.14.0] - 2026-11-11
 
 ### Added

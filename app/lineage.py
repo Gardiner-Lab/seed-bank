@@ -45,6 +45,7 @@ class _Tree:
         node.update(extra or {})
         if kind == 'lot':
             node['used_up'] = bool(row['used_up'])
+            node['did_not_germinate'] = bool(row['did_not_germinate'] if 'did_not_germinate' in row.keys() else 0)
         elif kind == 'plant':
             node.update(selected=bool(row['selected']), treatment=row['treatment'])
         if (kind, record_id) == self.focus:

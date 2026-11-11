@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS lots (
     germination REAL,
     zygosity TEXT NOT NULL DEFAULT '',
     used_up INTEGER NOT NULL DEFAULT 0,
+    did_not_germinate INTEGER NOT NULL DEFAULT 0,   -- sown, and nothing came up
     notes TEXT NOT NULL DEFAULT '',
     created_by TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -237,7 +238,8 @@ LINE_ADDED = ['permit', 'biosafety', 'gmo_type', 'accession', 'collection', 'sto
 # Where a plant grows and how it is treated, and a measurement's number and
 # unit: added to databases from before them. (table, column, declaration)
 ADDED = [('plants', 'place_id', 'TEXT'), ('plants', 'treatment', "TEXT NOT NULL DEFAULT ''"),
-         ('observations', 'number', 'REAL'), ('observations', 'unit', "TEXT NOT NULL DEFAULT ''")]
+         ('observations', 'number', 'REAL'), ('observations', 'unit', "TEXT NOT NULL DEFAULT ''"),
+         ('lots', 'did_not_germinate', 'INTEGER NOT NULL DEFAULT 0')]
 
 
 def initialize(db_path: Optional[str] = None) -> None:

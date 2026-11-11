@@ -46,6 +46,8 @@ table.data td { padding: .4rem .55rem; border-top: 1px solid var(--border); vert
 table.data tr.clickable { cursor: pointer; }
 table.data tr.clickable:hover td { background: var(--tt-green-soft); }
 table.data tr.faded td { color: var(--muted); }
+/* A seed lot that was sown and gave nothing: said where its germination % would be. */
+.no-germ { color: var(--danger, #a4332a); font-weight: 600; }
 table.data td.code { font-family: ui-monospace, monospace; white-space: nowrap; }
 table.data td.pick, table.data th:first-child { width: 2rem; }
 table.data tr.fit td.verdict { color: var(--tt-green-ink); }

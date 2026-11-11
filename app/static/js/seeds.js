@@ -447,7 +447,10 @@ const App = {
     const cells = {
       lines: (r) => [r.name, r.line_kind, el('i', {}, r.species), r.plasmids, r.lots, r.plants],
       lots: (r) => [`${r.line}`, r.generation, r.from_plant || r.source || '—', r.location, r.amount,
-        r.zygosity, r.germination !== null && r.germination !== undefined ? `${r.germination}%` : '', r.sown || ''],
+        r.zygosity,
+        r.did_not_germinate ? el('span', { class: 'no-germ', title: 'Sown, and nothing came up' }, 'none')
+          : r.germination !== null && r.germination !== undefined ? `${r.germination}%` : '',
+        r.sown || ''],
       plants: (r) => [r.line, r.lot, `#${r.number}${r.selected ? ' ★' : ''}`, r.status, r.zygosity,
         [r.place, r.location].filter(Boolean).join(' · '), r.treatment, euDate(r.sown_on)],
     }[view];
@@ -697,14 +700,17 @@ const App = {
   lotView(rec) {
     return el('div', {},
       this.head(rec, `${rec.line?.name || ''} ${rec.generation || ''}`,
-        [rec.used_up ? 'used up' : null, rec.location && `kept in ${rec.location}`, rec.amount].filter(Boolean).join(' · '), [
+        [rec.did_not_germinate ? 'did not germinate' : null, rec.used_up ? 'used up' : null,
+          rec.location && `kept in ${rec.location}`, rec.amount].filter(Boolean).join(' · '), [
           el('button', { class: 'btn btn-primary', onclick: () => this.sow(rec) }, glyph('plant'), ' Sow…'),
           el('button', { class: 'btn btn-secondary', onclick: () => this.segTest(rec) }, glyph('ratio'), ' Segregation test…'),
           el('button', { class: 'btn btn-secondary', onclick: () => formModal({
             title: `Edit ${rec.code}`,
             fields: [...(rec.plants.length ? [] : [{ name: 'line', label: 'Line (code)', value: rec.line?.code,
               hint: 'Correct it if the seeds were put in the wrong line. Possible until plants are sown from this lot.' }]),
-            ...this.lotFields(rec), { name: 'used_up', label: 'Used up', type: 'checkbox', value: rec.used_up }],
+            ...this.lotFields(rec), { name: 'used_up', label: 'Used up', type: 'checkbox', value: rec.used_up },
+              { name: 'did_not_germinate', label: 'Did not germinate', type: 'checkbox', value: rec.did_not_germinate,
+                hint: 'Sown, and nothing came up.' }],
             submit: async (v) => { await api('PUT', `/lots/${rec.code}`, v); this.reload(); },
           }) }, '✎ Edit')]),
       this.ancestry(rec),
@@ -1227,7 +1233,8 @@ const App = {
       list.length > 3 ? el('span', { class: 'hint' }, ` and ${list.length - 3} more`) : null) : null);
     const node = (n) => {
       if (n.hidden) return el('li', {}, el('span', { class: 'hint' }, `${n.code} (another lab's)`));
-      const about = n.kind === 'line' ? [n.line_kind, n.role && `(${n.role})`] : n.kind === 'lot' ? [n.generation, n.used_up && 'used up']
+      const about = n.kind === 'line' ? [n.line_kind, n.role && `(${n.role})`]
+        : n.kind === 'lot' ? [n.generation, n.did_not_germinate ? 'did not germinate' : n.used_up && 'used up']
         : [n.status, n.selected && '★', n.treatment];
       const kids = [...(n.lots || []), ...(n.plants || []), ...(n.lines || [])];
       const others = Object.entries(n.others || {});
